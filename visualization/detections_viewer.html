@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UK-OUI-SPY Detection Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #333;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            opacity: 0.9;
+        }
+
+        .file-upload {
+            background: #f5f7fa;
+            padding: 30px;
+            text-align: center;
+            border-bottom: 2px solid #e1e8ed;
+        }
+
+        .file-upload input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: #667eea;
+            color: white;
+            padding: 15px 40px;
+            border-radius: 50px;
+            cursor: pointer;
+            display: inline-block;
+            font-size: 1.1em;
+            transition: all 0.3s;
+        }
+
+        .upload-btn:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f5f7fa;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .filters {
+            padding: 20px 30px;
+            background: white;
+            border-bottom: 2px solid #e1e8ed;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #666;
+        }
+
+        .filter-group select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e1e8ed;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+
+        .detections-list {
+            padding: 30px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .detection-card {
+            background: white;
+            border-left: 5px solid #ccc;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+        }
+
+        .detection-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        }
+
+        .detection-card.high {
+            border-left-color: #e74c3c;
+        }
+
+        .detection-card.medium {
+            border-left-color: #f39c12;
+        }
+
+        .detection-card.low {
+            border-left-color: #27ae60;
+        }
+
+        .detection-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .manufacturer {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .relevance {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+
+        .relevance.high {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .relevance.medium {
+            background: #f39c12;
+            color: white;
+        }
+
+        .relevance.low {
+            background: #27ae60;
+            color: white;
+        }
+
+        .detection-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .info-item {
+            font-size: 0.9em;
+        }
+
+        .info-label {
+            color: #666;
+            font-weight: 600;
+        }
+
+        .info-value {
+            color: #333;
+        }
+
+        .category-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            background: #3498db;
+            color: white;
+        }
+
+        .charts {
+            padding: 30px;
+            background: #f5f7fa;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+
+        .chart-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .chart-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 60px;
+            color: #999;
+            font-size: 1.2em;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 UK-OUI-SPY Detection Viewer</h1>
+            <p>Analyze surveillance device detections from your ESP32 scanner</p>
+        </header>
+
+        <div class="file-upload">
+            <label for="csvFile" class="upload-btn">
+                📁 Load detections.csv
+            </label>
+            <input type="file" id="csvFile" accept=".csv">
+        </div>
+
+        <div id="statsSection" style="display: none;">
+            <div class="stats-grid" id="statsGrid"></div>
+        </div>
+
+        <div id="filtersSection" style="display: none;">
+            <div class="filters">
+                <div class="filter-group">
+                    <label>Relevance</label>
+                    <select id="relevanceFilter">
+                        <option value="all">All</option>
+                        <option value="HIGH">High</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="LOW">Low</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Category</label>
+                    <select id="categoryFilter">
+                        <option value="all">All</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Manufacturer</label>
+                    <select id="manufacturerFilter">
+                        <option value="all">All</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div id="chartsSection" style="display: none;">
+            <div class="charts">
+                <div class="chart-grid" id="chartsGrid"></div>
+            </div>
+        </div>
+
+        <div id="detectionsSection" style="display: none;">
+            <div class="detections-list" id="detectionsList"></div>
+        </div>
+
+        <div id="noData" class="no-data">
+            📊 No data loaded. Upload a detections.csv file to begin analysis.
+        </div>
+    </div>
+
+    <script>
+        let detectionsData = [];
+        let filteredData = [];
+
+        document.getElementById('csvFile').addEventListener('change', handleFileSelect);
+        document.getElementById('relevanceFilter').addEventListener('change', applyFilters);
+        document.getElementById('categoryFilter').addEventListener('change', applyFilters);
+        document.getElementById('manufacturerFilter').addEventListener('change', applyFilters);
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csv = e.target.result;
+                parseCSV(csv);
+            };
+            reader.readAsText(file);
+        }
+
+        function parseCSV(csv) {
+            const lines = csv.split('\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+
+            detectionsData = [];
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+
+                const values = lines[i].split(',').map(v => v.trim());
+                const detection = {};
+
+                headers.forEach((header, index) => {
+                    detection[header] = values[index];
+                });
+
+                detectionsData.push(detection);
+            }
+
+            filteredData = [...detectionsData];
+            displayData();
+        }
+
+        function displayData() {
+            if (detectionsData.length === 0) return;
+
+            document.getElementById('noData').style.display = 'none';
+            document.getElementById('statsSection').style.display = 'block';
+            document.getElementById('filtersSection').style.display = 'block';
+            document.getElementById('chartsSection').style.display = 'block';
+            document.getElementById('detectionsSection').style.display = 'block';
+
+            displayStats();
+            populateFilters();
+            displayCharts();
+            displayDetections();
+        }
+
+        function displayStats() {
+            const uniqueMACs = new Set(detectionsData.map(d => d.MAC)).size;
+            const uniqueManufacturers = new Set(detectionsData.map(d => d.Manufacturer)).size;
+            const highRisk = detectionsData.filter(d => d.Relevance === 'HIGH').length;
+            const avgRSSI = (detectionsData.reduce((sum, d) => sum + parseInt(d.RSSI), 0) / detectionsData.length).toFixed(1);
+
+            const statsHTML = `
+                <div class="stat-card">
+                    <div class="stat-label">Total Detections</div>
+                    <div class="stat-value">${detectionsData.length}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Unique Devices</div>
+                    <div class="stat-value">${uniqueMACs}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Manufacturers</div>
+                    <div class="stat-value">${uniqueManufacturers}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">High Risk</div>
+                    <div class="stat-value" style="color: #e74c3c">${highRisk}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg RSSI</div>
+                    <div class="stat-value">${avgRSSI} dBm</div>
+                </div>
+            `;
+
+            document.getElementById('statsGrid').innerHTML = statsHTML;
+        }
+
+        function populateFilters() {
+            const categories = [...new Set(detectionsData.map(d => d.Category))].sort();
+            const manufacturers = [...new Set(detectionsData.map(d => d.Manufacturer))].sort();
+
+            const categorySelect = document.getElementById('categoryFilter');
+            categorySelect.innerHTML = '<option value="all">All</option>';
+            categories.forEach(cat => {
+                categorySelect.innerHTML += `<option value="${cat}">${cat}</option>`;
+            });
+
+            const manufacturerSelect = document.getElementById('manufacturerFilter');
+            manufacturerSelect.innerHTML = '<option value="all">All</option>';
+            manufacturers.forEach(mfg => {
+                manufacturerSelect.innerHTML += `<option value="${mfg}">${mfg}</option>`;
+            });
+        }
+
+        function applyFilters() {
+            const relevance = document.getElementById('relevanceFilter').value;
+            const category = document.getElementById('categoryFilter').value;
+            const manufacturer = document.getElementById('manufacturerFilter').value;
+
+            filteredData = detectionsData.filter(d => {
+                if (relevance !== 'all' && d.Relevance !== relevance) return false;
+                if (category !== 'all' && d.Category !== category) return false;
+                if (manufacturer !== 'all' && d.Manufacturer !== manufacturer) return false;
+                return true;
+            });
+
+            displayDetections();
+        }
+
+        function displayCharts() {
+            const categoryCount = {};
+            const relevanceCount = {};
+            const manufacturerCount = {};
+
+            detectionsData.forEach(d => {
+                categoryCount[d.Category] = (categoryCount[d.Category] || 0) + 1;
+                relevanceCount[d.Relevance] = (relevanceCount[d.Relevance] || 0) + 1;
+                manufacturerCount[d.Manufacturer] = (manufacturerCount[d.Manufacturer] || 0) + 1;
+            });
+
+            const topManufacturers = Object.entries(manufacturerCount)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            let chartsHTML = '';
+
+            // Category breakdown
+            chartsHTML += `
+                <div class="chart-card">
+                    <div class="chart-title">Category Distribution</div>
+                    ${createBarChart(categoryCount, '#3498db')}
+                </div>
+            `;
+
+            // Relevance breakdown
+            chartsHTML += `
+                <div class="chart-card">
+                    <div class="chart-title">Relevance Levels</div>
+                    ${createBarChart(relevanceCount, '#e74c3c')}
+                </div>
+            `;
+
+            // Top manufacturers
+            chartsHTML += `
+                <div class="chart-card">
+                    <div class="chart-title">Top 10 Manufacturers</div>
+                    ${createBarChart(Object.fromEntries(topManufacturers), '#9b59b6')}
+                </div>
+            `;
+
+            document.getElementById('chartsGrid').innerHTML = chartsHTML;
+        }
+
+        function createBarChart(data, color) {
+            const maxValue = Math.max(...Object.values(data));
+            let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+
+            Object.entries(data).forEach(([label, value]) => {
+                const percentage = (value / maxValue) * 100;
+                html += `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="flex: 0 0 120px; font-size: 0.9em; color: #666;">${label}</div>
+                        <div style="flex: 1; background: #e1e8ed; height: 25px; border-radius: 3px; overflow: hidden;">
+                            <div style="width: ${percentage}%; background: ${color}; height: 100%; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; color: white; font-size: 0.85em; font-weight: bold;">
+                                ${value}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            return html;
+        }
+
+        function displayDetections() {
+            const listHTML = filteredData.map(d => {
+                const relevanceClass = d.Relevance.toLowerCase();
+                return `
+                    <div class="detection-card ${relevanceClass}">
+                        <div class="detection-header">
+                            <div class="manufacturer">${d.Manufacturer}</div>
+                            <div class="relevance ${relevanceClass}">${d.Relevance}</div>
+                        </div>
+                        <div class="detection-info">
+                            <div class="info-item">
+                                <span class="info-label">Category:</span>
+                                <span class="category-badge">${d.Category}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">MAC:</span>
+                                <span class="info-value">${d.MAC}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">RSSI:</span>
+                                <span class="info-value">${d.RSSI} dBm</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Type:</span>
+                                <span class="info-value">${d.Type}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Deployment:</span>
+                                <span class="info-value">${d.Deployment}</span>
+                            </div>
+                            <div class="info-item" style="grid-column: 1 / -1;">
+                                <span class="info-label">Notes:</span>
+                                <span class="info-value">${d.Notes}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('detectionsList').innerHTML = listHTML || '<div class="no-data">No detections match your filters</div>';
+        }
+    </script>
+</body>
+</html>

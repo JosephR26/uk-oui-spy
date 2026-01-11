@@ -129,6 +129,94 @@ const OUIEntry UK_OUI_DATABASE[] = {
 
     // Garmin - Dash cams
     {"00:0C:6E", "Garmin", CAT_DASH_CAM, REL_LOW, DEPLOY_PRIVATE, "Dash Cameras"},
+
+    // Additional UK-relevant manufacturers
+
+    // Milestone Systems - VMS (Video Management Software) used by UK police
+    {"00:0C:C8", "Milestone Systems", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "Police VMS"},
+
+    // Verkada - Cloud-managed security cameras
+    {"E0:1F:88", "Verkada", CAT_CLOUD_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "Cloud CCTV"},
+
+    // Honeywell - Security systems
+    {"00:15:7D", "Honeywell", CAT_CCTV, REL_MEDIUM, DEPLOY_GOVERNMENT, "Security Systems"},
+    {"00:E0:4C", "Honeywell", CAT_CCTV, REL_MEDIUM, DEPLOY_TRANSPORT, "Building Security"},
+
+    // Canon - Professional surveillance cameras
+    {"00:00:85", "Canon", CAT_CCTV, REL_MEDIUM, DEPLOY_GOVERNMENT, "Network Cameras"},
+
+    // Arlo (Netgear) - Consumer wireless cameras
+    {"D0:73:D5", "Arlo Technologies", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "Wireless Cameras"},
+
+    // Wyze - Budget consumer cameras
+    {"2C:AA:8E", "Wyze Labs", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "Smart Cameras"},
+
+    // Eufy (Anker) - Consumer security cameras
+    {"T8:1D:7F", "Anker", CAT_DOORBELL_CAM, REL_LOW, DEPLOY_PRIVATE, "Eufy Cameras"},
+
+    // Blink (Amazon) - Consumer cameras
+    {"A0:02:DC", "Amazon", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "Blink Cameras"},
+
+    // Digital Barriers - Specialist surveillance (UK police)
+    {"00:1E:C0", "Digital Barriers", CAT_BODYCAM, REL_HIGH, DEPLOY_POLICE, "Police Body Cameras"},
+
+    // Edesix - UK body worn camera manufacturer
+    {"00:26:08", "Edesix", CAT_BODYCAM, REL_HIGH, DEPLOY_POLICE, "UK Police Body Cams"},
+
+    // Reveal Media - Body cameras (UK police/NHS)
+    {"00:1B:C5", "Reveal Media", CAT_BODYCAM, REL_HIGH, DEPLOY_POLICE, "Body Worn Video"},
+
+    // Autel Robotics - Drones (commercial/police)
+    {"00:25:DF", "Autel Robotics", CAT_DRONE, REL_MEDIUM, DEPLOY_GOVERNMENT, "Commercial Drones"},
+
+    // Skydio - Advanced autonomous drones
+    {"00:60:37", "Skydio", CAT_DRONE, REL_MEDIUM, DEPLOY_POLICE, "Autonomous Drones"},
+
+    // FLIR (Teledyne) - Thermal imaging (police/search & rescue)
+    {"00:0D:66", "FLIR Systems", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "Thermal Cameras"},
+
+    // IndigoVision - UK-based IP CCTV
+    {"00:13:FE", "IndigoVision", CAT_CCTV, REL_MEDIUM, DEPLOY_COUNCIL, "IP CCTV"},
+
+    // Avigilon (additional OUIs)
+    {"00:05:CA", "Avigilon", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "HD Analytics"},
+    {"D8:90:E8", "Avigilon", CAT_ANPR, REL_HIGH, DEPLOY_POLICE, "LPR/ANPR"},
+
+    // Hikvision (additional OUIs)
+    {"54:C4:15", "Hikvision", CAT_CCTV, REL_HIGH, DEPLOY_TRANSPORT, "PTZ Cameras"},
+    {"C4:2F:90", "Hikvision", CAT_CCTV, REL_HIGH, DEPLOY_COUNCIL, "Smart Cameras"},
+    {"14:2D:27", "Hikvision", CAT_ANPR, REL_HIGH, DEPLOY_POLICE, "ANPR Systems"},
+
+    // Dahua (additional OUIs)
+    {"A0:BD:1D", "Dahua", CAT_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "PTZ Cameras"},
+    {"78:D8:B5", "Dahua", CAT_CCTV, REL_MEDIUM, DEPLOY_TRANSPORT, "Traffic Cameras"},
+
+    // Hanwha (additional OUIs)
+    {"00:16:6C", "Hanwha Techwin", CAT_CCTV, REL_MEDIUM, DEPLOY_GOVERNMENT, "Wisenet Cameras"},
+
+    // Geovision - Taiwan manufacturer (UK market)
+    {"00:06:D2", "Geovision", CAT_CCTV, REL_LOW, DEPLOY_RETAIL, "DVR/NVR Systems"},
+
+    // Lorex - Consumer CCTV (UK market)
+    {"00:21:23", "Lorex", CAT_CCTV, REL_LOW, DEPLOY_PRIVATE, "Home Security"},
+
+    // Swann - Consumer CCTV (popular in UK)
+    {"00:11:8B", "Swann", CAT_CCTV, REL_LOW, DEPLOY_PRIVATE, "DIY CCTV"},
+
+    // Yale - Smart locks with cameras
+    {"F0:D5:BF", "Yale", CAT_DOORBELL_CAM, REL_LOW, DEPLOY_PRIVATE, "Smart Locks"},
+
+    // Verisure (Securitas Direct) - UK alarm/CCTV provider
+    {"00:19:5B", "Securitas", CAT_CCTV, REL_MEDIUM, DEPLOY_PRIVATE, "Verisure CCTV"},
+
+    // ADT - Security provider (UK market)
+    {"00:13:02", "ADT Security", CAT_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "Monitored CCTV"},
+
+    // Thinkware - Dash cams
+    {"00:37:6D", "Thinkware", CAT_DASH_CAM, REL_LOW, DEPLOY_PRIVATE, "Dash Cameras"},
+
+    // Viofo - Dash cams
+    {"00:26:5A", "Viofo", CAT_DASH_CAM, REL_LOW, DEPLOY_PRIVATE, "Dash Cameras"},
 };
 
 const int UK_OUI_DATABASE_SIZE = sizeof(UK_OUI_DATABASE) / sizeof(OUIEntry);
