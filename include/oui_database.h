@@ -217,6 +217,236 @@ const OUIEntry UK_OUI_DATABASE[] = {
 
     // Viofo - Dash cams
     {"00:26:5A", "Viofo", CAT_DASH_CAM, REL_LOW, DEPLOY_PRIVATE, "Dash Cameras"},
+
+    // ============================================================
+    // ADDITIONAL UK-SPECIFIC SURVEILLANCE MANUFACTURERS
+    // ============================================================
+
+    // Axon (Taser International) - Major UK police body camera supplier
+    {"00:02:55", "Axon Enterprise", CAT_BODYCAM, REL_HIGH, DEPLOY_POLICE, "UK Police Body Cams"},
+    {"00:18:F3", "Axon Enterprise", CAT_BODYCAM, REL_HIGH, DEPLOY_POLICE, "Axon Body Cameras"},
+    {"6C:C7:EC", "Axon Enterprise", CAT_BODYCAM, REL_HIGH, DEPLOY_POLICE, "Axon Fleet/Body Cams"},
+
+    // WatchGuard (Motorola subsidiary) - UK police vehicle/body cams
+    {"00:0C:D4", "WatchGuard Video", CAT_BODYCAM, REL_HIGH, DEPLOY_POLICE, "Police Dash/Body Cams"},
+
+    // Sepura (Hytera) - UK police communications/BWV
+    {"00:21:10", "Sepura", CAT_BODYCAM, REL_HIGH, DEPLOY_POLICE, "Police Radio/BWV"},
+
+    // Zepcam (Netherlands, used by UK police/NHS)
+    {"00:0E:1D", "Zepcam", CAT_BODYCAM, REL_HIGH, DEPLOY_POLICE, "Body Worn Cameras"},
+
+    // Motorola (additional OUIs for TETRA/cameras)
+    {"00:04:56", "Motorola", CAT_BODYCAM, REL_HIGH, DEPLOY_POLICE, "Police Equipment"},
+    {"00:90:9C", "Motorola", CAT_TRAFFIC, REL_HIGH, DEPLOY_GOVERNMENT, "Traffic Management"},
+    {"00:D0:BC", "Motorola", CAT_ANPR, REL_HIGH, DEPLOY_POLICE, "Public Safety ANPR"},
+
+    // Siemens - UK traffic cameras and smart city infrastructure
+    {"00:0E:8C", "Siemens", CAT_TRAFFIC, REL_MEDIUM, DEPLOY_TRANSPORT, "Traffic CCTV"},
+    {"00:50:7F", "Siemens", CAT_TRAFFIC, REL_MEDIUM, DEPLOY_GOVERNMENT, "Smart City Cameras"},
+    {"00:1B:1B", "Siemens", CAT_TRAFFIC, REL_MEDIUM, DEPLOY_TRANSPORT, "Transport Systems"},
+
+    // Kapsch TrafficCom - ANPR/congestion charging (London ULEZ)
+    {"00:03:52", "Kapsch", CAT_ANPR, REL_HIGH, DEPLOY_GOVERNMENT, "ULEZ/ANPR London"},
+    {"00:21:5C", "Kapsch", CAT_TRAFFIC, REL_HIGH, DEPLOY_TRANSPORT, "Congestion Charging"},
+
+    // SWARCO - UK traffic management and ANPR
+    {"00:30:05", "SWARCO", CAT_TRAFFIC, REL_MEDIUM, DEPLOY_TRANSPORT, "Traffic Signals/ANPR"},
+
+    // Jenoptik - Speed/ANPR cameras (UK speed enforcement)
+    {"00:0C:A4", "Jenoptik", CAT_TRAFFIC, REL_HIGH, DEPLOY_POLICE, "Speed/ANPR Cameras"},
+
+    // Tattile - ANPR cameras (used in UK)
+    {"00:07:7C", "Tattile", CAT_ANPR, REL_MEDIUM, DEPLOY_TRANSPORT, "ANPR Solutions"},
+
+    // NDI Recognition Systems - ANPR specialists
+    {"00:50:C2", "NDI Recognition", CAT_ANPR, REL_HIGH, DEPLOY_POLICE, "ANPR Systems"},
+
+    // Redflex - Traffic enforcement cameras
+    {"00:1F:CD", "Redflex", CAT_TRAFFIC, REL_MEDIUM, DEPLOY_GOVERNMENT, "Speed Cameras"},
+
+    // Verra Mobility (Redflex/ATS) - UK traffic enforcement
+    {"00:0A:E4", "Verra Mobility", CAT_TRAFFIC, REL_MEDIUM, DEPLOY_GOVERNMENT, "Traffic Enforcement"},
+
+    // Additional Hikvision OUIs (more variants detected in UK)
+    {"4C:BD:8F", "Hikvision", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "Network Cameras"},
+    {"68:E1:66", "Hikvision", CAT_CCTV, REL_HIGH, DEPLOY_COUNCIL, "IP CCTV"},
+    {"C0:56:E3", "Hikvision", CAT_CCTV, REL_HIGH, DEPLOY_TRANSPORT, "Surveillance Cameras"},
+    {"D4:4B:5E", "Hikvision", CAT_ANPR, REL_HIGH, DEPLOY_POLICE, "DeepinMind ANPR"},
+    {"F0:1D:BC", "Hikvision", CAT_CCTV, REL_HIGH, DEPLOY_RETAIL, "Smart Cameras"},
+
+    // Additional Dahua OUIs
+    {"00:26:37", "Dahua", CAT_CCTV, REL_MEDIUM, DEPLOY_COUNCIL, "IP Cameras"},
+    {"2C:44:05", "Dahua", CAT_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "Network Cameras"},
+    {"E8:CC:18", "Dahua", CAT_CCTV, REL_MEDIUM, DEPLOY_TRANSPORT, "HDCVI Cameras"},
+    {"F4:83:CD", "Dahua", CAT_ANPR, REL_MEDIUM, DEPLOY_POLICE, "LPR Cameras"},
+
+    // Exacq (Tyco/JCI) - VMS widely used in UK
+    {"00:40:FA", "Exacq Technologies", CAT_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "Video Management"},
+
+    // Salient Systems - VMS (UK installations)
+    {"00:19:70", "Salient Systems", CAT_CCTV, REL_MEDIUM, DEPLOY_GOVERNMENT, "CompleteView VMS"},
+
+    // March Networks - Transport CCTV (buses/trains)
+    {"00:03:C0", "March Networks", CAT_CCTV, REL_MEDIUM, DEPLOY_TRANSPORT, "Transit Surveillance"},
+
+    // Dedicated Micros (AD Group) - UK CCTV manufacturer
+    {"00:02:A2", "Dedicated Micros", CAT_CCTV, REL_MEDIUM, DEPLOY_COUNCIL, "UK DVR/NVR"},
+
+    // 360 Vision Technology - UK PTZ camera manufacturer
+    {"00:0D:8B", "360 Vision", CAT_CCTV, REL_MEDIUM, DEPLOY_TRANSPORT, "UK PTZ Cameras"},
+
+    // Videcon - UK CCTV installer/integrator
+    {"00:1D:09", "Videcon", CAT_CCTV, REL_MEDIUM, DEPLOY_COUNCIL, "UK CCTV Systems"},
+
+    // Dallmeier - High-security CCTV (UK government)
+    {"00:11:5B", "Dallmeier", CAT_CCTV, REL_MEDIUM, DEPLOY_GOVERNMENT, "Panomera Cameras"},
+
+    // Arecont Vision (Costar) - Megapixel cameras
+    {"00:40:8C", "Arecont Vision", CAT_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "Megapixel Cameras"},
+
+    // ACTi - Taiwan manufacturer (UK market presence)
+    {"00:11:98", "ACTi", CAT_CCTV, REL_LOW, DEPLOY_RETAIL, "IP Cameras"},
+
+    // Avigilon Alta (Openpath) - Cloud access control with cameras
+    {"E4:11:5B", "Avigilon Alta", CAT_CLOUD_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "Cloud Access Control"},
+
+    // Verkada (additional OUIs)
+    {"88:DC:96", "Verkada", CAT_CLOUD_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "Hybrid Cloud Cameras"},
+
+    // Meraki (Cisco) - Cloud-managed cameras (UK enterprise)
+    {"00:18:0A", "Cisco Meraki", CAT_CLOUD_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "Cloud Cameras"},
+    {"AC:17:C8", "Cisco Meraki", CAT_CLOUD_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "MV Cameras"},
+    {"E0:55:3D", "Cisco Meraki", CAT_CLOUD_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "Smart Cameras"},
+
+    // Eagle Eye Networks - Cloud VMS (UK market)
+    {"00:0C:84", "Eagle Eye Networks", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_RETAIL, "Cloud VMS"},
+
+    // Rhombus - Cloud security cameras
+    {"9C:4E:36", "Rhombus Systems", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_RETAIL, "Cloud Cameras"},
+
+    // Hanwha (additional Samsung security OUIs)
+    {"00:0D:F0", "Hanwha Techwin", CAT_CCTV, REL_MEDIUM, DEPLOY_TRANSPORT, "Wisenet Cameras"},
+    {"20:13:E0", "Hanwha Techwin", CAT_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "Network Cameras"},
+
+    // Sony (additional professional OUIs)
+    {"08:00:46", "Sony", CAT_CCTV, REL_MEDIUM, DEPLOY_GOVERNMENT, "IP Cameras"},
+    {"50:EB:1A", "Sony", CAT_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "Network Cameras"},
+
+    // Canon (additional OUIs)
+    {"00:04:A9", "Canon", CAT_CCTV, REL_MEDIUM, DEPLOY_GOVERNMENT, "VB Series Cameras"},
+
+    // Panasonic (additional OUIs)
+    {"00:0D:C1", "Panasonic", CAT_CCTV, REL_MEDIUM, DEPLOY_TRANSPORT, "i-PRO Cameras"},
+    {"00:80:64", "Panasonic", CAT_CCTV, REL_MEDIUM, DEPLOY_GOVERNMENT, "WV Series Cameras"},
+
+    // Bosch (additional security OUIs)
+    {"00:12:E0", "Bosch Security", CAT_CCTV, REL_MEDIUM, DEPLOY_TRANSPORT, "Autodome Cameras"},
+    {"00:1A:A0", "Bosch Security", CAT_TRAFFIC, REL_HIGH, DEPLOY_POLICE, "Traffic Solutions"},
+
+    // Axis (additional OUIs)
+    {"00:09:2D", "Axis Communications", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "M-Series Cameras"},
+    {"00:50:C2", "Axis Communications", CAT_CCTV, REL_HIGH, DEPLOY_TRANSPORT, "P-Series Cameras"},
+
+    // DJI (additional drone OUIs)
+    {"AC:17:02", "DJI", CAT_DRONE, REL_HIGH, DEPLOY_POLICE, "Enterprise Drones"},
+    {"D0:53:C4", "DJI", CAT_DRONE, REL_MEDIUM, DEPLOY_GOVERNMENT, "Matrice Series"},
+
+    // Autel (additional OUIs)
+    {"DC:9F:DB", "Autel Robotics", CAT_DRONE, REL_MEDIUM, DEPLOY_GOVERNMENT, "EVO Series Drones"},
+
+    // Yuneec - Commercial drones (UK emergency services)
+    {"00:26:66", "Yuneec", CAT_DRONE, REL_MEDIUM, DEPLOY_POLICE, "H520 Police Drones"},
+
+    // senseFly (Parrot subsidiary) - Fixed-wing survey drones
+    {"90:3A:E6", "senseFly", CAT_DRONE, REL_LOW, DEPLOY_GOVERNMENT, "Survey Drones"},
+
+    // Blue Security (UK CCTV installer - used OUI may vary)
+    {"00:1E:37", "Blue Security", CAT_CCTV, REL_LOW, DEPLOY_PRIVATE, "UK CCTV Installer"},
+
+    // Milestone (additional OUIs for XProtect VMS)
+    {"00:50:C2", "Milestone Systems", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "XProtect VMS"},
+
+    // Genetec (additional OUIs)
+    {"00:15:C5", "Genetec", CAT_ANPR, REL_HIGH, DEPLOY_POLICE, "AutoVu ANPR"},
+
+    // Wavestore - UK-based VMS manufacturer
+    {"00:0E:C6", "Wavestore", CAT_CCTV, REL_MEDIUM, DEPLOY_COUNCIL, "UK Video Management"},
+
+    // Qognify (OnSSI/NICE) - Enterprise VMS
+    {"00:1B:67", "Qognify", CAT_CCTV, REL_MEDIUM, DEPLOY_GOVERNMENT, "Ocularis VMS"},
+
+    // Tyco/Johnson Controls - Integrated security
+    {"00:12:CF", "Tyco Security", CAT_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "victor/Illustra"},
+
+    // Honeywell (additional security OUIs)
+    {"00:06:2A", "Honeywell", CAT_CCTV, REL_MEDIUM, DEPLOY_GOVERNMENT, "equIP Cameras"},
+    {"00:D0:06", "Honeywell", CAT_CCTV, REL_MEDIUM, DEPLOY_TRANSPORT, "Performance Series"},
+
+    // Avigilon (additional H4/H5 camera OUIs)
+    {"68:EB:C5", "Avigilon", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "H5A Cameras"},
+
+    // UTC Fire & Security (Interlogix) - Now part of Carrier
+    {"00:0D:20", "Interlogix", CAT_CCTV, REL_LOW, DEPLOY_RETAIL, "TruVision Cameras"},
+
+    // Uniview (formerly Unisight) - Growing UK market share
+    {"B4:A3:82", "Uniview", CAT_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "IPC Cameras"},
+    {"00:12:12", "Uniview", CAT_CCTV, REL_MEDIUM, DEPLOY_COUNCIL, "Network Cameras"},
+
+    // Tiandy - Chinese manufacturer (UK installations)
+    {"00:1F:AF", "Tiandy", CAT_CCTV, REL_LOW, DEPLOY_RETAIL, "IP Cameras"},
+
+    // CP Plus - Budget CCTV (UK market)
+    {"00:1E:8C", "CP Plus", CAT_CCTV, REL_LOW, DEPLOY_PRIVATE, "Budget CCTV"},
+
+    // LTS (Hikvision OEM brand in US/UK)
+    {"00:1B:63", "LTS Security", CAT_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "Platinum Series"},
+
+    // Digital Watchdog - Spectrum/MEGApix (UK market)
+    {"00:11:D9", "Digital Watchdog", CAT_CCTV, REL_LOW, DEPLOY_RETAIL, "DW Spectrum"},
+
+    // Razberi Technologies - Surveillance servers/appliances
+    {"00:1C:14", "Razberi", CAT_CCTV, REL_MEDIUM, DEPLOY_GOVERNMENT, "ServerSwitch"},
+
+    // FLIR (additional thermal/surveillance OUIs)
+    {"00:40:D0", "FLIR Systems", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "Thermal Cameras"},
+    {"00:05:07", "FLIR Systems", CAT_CCTV, REL_HIGH, DEPLOY_GOVERNMENT, "Security Thermal"},
+
+    // Ring (additional Amazon OUIs)
+    {"B0:4E:26", "Ring", CAT_DOORBELL_CAM, REL_LOW, DEPLOY_PRIVATE, "Video Doorbell Pro"},
+    {"FC:92:8F", "Ring", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "Stick Up Cam"},
+
+    // Google Nest (additional OUIs)
+    {"1C:3E:84", "Google Nest", CAT_DOORBELL_CAM, REL_LOW, DEPLOY_PRIVATE, "Hello Doorbell"},
+    {"F0:EF:86", "Google Nest", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "Nest Cam IQ"},
+
+    // TP-Link (Tapo/Kasa cameras - popular in UK)
+    {"50:C7:BF", "TP-Link", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "Tapo Cameras"},
+    {"84:D8:1B", "TP-Link", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "Kasa Cameras"},
+
+    // Anker (Eufy additional OUIs)
+    {"34:EF:B6", "Anker", CAT_DOORBELL_CAM, REL_LOW, DEPLOY_PRIVATE, "Eufy Video Doorbell"},
+    {"24:0A:C4", "Anker", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "Eufy Cameras"},
+
+    // Xiaomi - Mi/Aqara cameras (UK market)
+    {"34:CE:00", "Xiaomi", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "Mi Cameras"},
+    {"78:11:DC", "Xiaomi", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "Aqara Cameras"},
+
+    // Imou (Dahua consumer brand)
+    {"38:D2:CA", "Imou", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "Dahua Consumer"},
+
+    // Amcrest (Dahua OEM)
+    {"00:62:6E", "Amcrest", CAT_CCTV, REL_LOW, DEPLOY_PRIVATE, "Dahua OEM"},
+    {"9C:8E:CD", "Amcrest", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "Cloud Cameras"},
+
+    // Reolink (additional OUIs)
+    {"00:03:7F", "Reolink", CAT_CCTV, REL_LOW, DEPLOY_PRIVATE, "RLC Series"},
+    {"B0:A7:B9", "Reolink", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "WiFi Cameras"},
+
+    // Unifi (Ubiquiti additional OUIs)
+    {"18:E8:29", "Ubiquiti Networks", CAT_CCTV, REL_LOW, DEPLOY_RETAIL, "UniFi Cameras"},
+    {"24:5A:4C", "Ubiquiti Networks", CAT_CCTV, REL_LOW, DEPLOY_PRIVATE, "G3/G4 Cameras"},
+    {"FC:EC:DA", "Ubiquiti Networks", CAT_CCTV, REL_LOW, DEPLOY_RETAIL, "UniFi Protect"},
 };
 
 const int UK_OUI_DATABASE_SIZE = sizeof(UK_OUI_DATABASE) / sizeof(OUIEntry);
