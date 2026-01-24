@@ -104,7 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Hardware Support
 - ESP32-2432S028 development board
 - ILI9341 TFT display driver
-- Resistive touch controller
+- capacitive touch controller
 - MicroSD card (SPI, GPIO 5)
 - Passive buzzer (GPIO 25)
 - LED indicator (GPIO 4)

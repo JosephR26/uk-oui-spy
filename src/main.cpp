@@ -2,8 +2,11 @@
  * UK-OUI-SPY ESP32 v6
  * Portable UK Surveillance Device Detector
  *
- * Hardware: ESP32-2432S028 (2.8" ILI9341 touchscreen)
+ * Hardware: ESP32-2432S028 (2.8" ILI9341 TFT, capacitive touch)
  * Features: BLE/WiFi scanning, OUI matching, proximity alerts, logging
+ *
+ * Note: This board uses FT6236 capacitive touch controller (I2C).
+ *       For production use, implement proper capacitive touch handling.
  */
 
 #include <Arduino.h>

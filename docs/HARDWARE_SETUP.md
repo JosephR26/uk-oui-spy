@@ -20,11 +20,17 @@ Complete hardware assembly and configuration guide for the ESP32-2432S028 survei
 **ESP32-2432S028 Development Board**
 - **Processor**: ESP32 dual-core @ 240MHz
 - **Display**: 2.8" ILI9341 TFT (240x320 pixels)
-- **Touch**: Resistive touch controller
+- **Touch**: FT6236 capacitive touch controller (I2C)
 - **RAM**: 520KB SRAM
 - **Flash**: 4MB
 - **Connectivity**: WiFi 802.11 b/g/n, Bluetooth 4.2 BLE
 - **Price**: ~£15-20 GBP
+
+**Touch Controller Specifications:**
+- **Type**: Capacitive (more sensitive than resistive)
+- **Controller**: FT6236 or compatible
+- **Interface**: I2C (SDA: GPIO 21, SCL: GPIO 22)
+- **IRQ Pin**: GPIO 27 (optional interrupt)
 
 **Where to buy:**
 - AliExpress: Search "ESP32-2432S028"

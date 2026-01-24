@@ -26,8 +26,8 @@ UK-OUI-SPY is a specialized surveillance detection tool designed for security re
 
 - **ESP32-2432S028** development board
   - ESP32 dual-core processor
-  - 2.8" ILI9341 TFT touchscreen (240x320)
-  - Built-in resistive touch controller
+  - 2.8" ILI9341 TFT display (240x320)
+  - FT6236 capacitive touchscreen (I2C)
   - Integrated battery charging circuit
 
 ### Optional Components
@@ -42,6 +42,9 @@ UK-OUI-SPY is a specialized surveillance detection tool designed for security re
 | Component | GPIO Pin |
 |-----------|----------|
 | TFT Display | Hardware SPI (pre-configured) |
+| Capacitive Touch SDA | GPIO 21 (I2C) |
+| Capacitive Touch SCL | GPIO 22 (I2C) |
+| Touch IRQ | GPIO 27 (optional) |
 | SD Card CS | GPIO 5 |
 | Buzzer | GPIO 25 |
 | LED Indicator | GPIO 4 |
