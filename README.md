@@ -12,7 +12,7 @@ UK-OUI-SPY is a specialized surveillance detection tool designed for security re
 
 ### Key Features
 
-- **UK-Specific OUI Database**: Curated list of 40+ surveillance device manufacturers
+- **UK-Specific OUI Database**: Curated list of **230+ surveillance device OUIs** covering 80+ manufacturers
 - **Multi-Protocol Scanning**: BLE and Wi-Fi (2.4GHz) MAC address detection
 - **Proximity Alerts**: RSSI-based distance estimation with audio/visual feedback
 - **Touchscreen UI**: Color-coded, scrollable detection list on 2.8" ILI9341 display
@@ -153,31 +153,79 @@ The device emits audio alerts based on signal strength (RSSI):
 
 ## OUI Database
 
-The device includes 40+ OUIs from UK-relevant surveillance manufacturers:
+The device includes **230+ OUI entries** from UK-relevant surveillance manufacturers (v1.0.1 expansion):
 
-### High-Relevance Devices (Red)
+### High-Relevance Devices (Red) - Police/Government
 
-- **Hikvision** - Major UK police/council CCTV supplier
+**Body Cameras & Police Equipment:**
+- **Axon Enterprise** ⭐ - UK police body camera standard (Met Police, most UK forces)
 - **Axis Communications** - Body cameras, transport CCTV
-- **Dahua Technology** - Council/retail IP cameras
-- **Motorola Solutions** - ANPR systems, police body cams
-- **DJI** - Police drones, aerial surveillance
+- **WatchGuard Video** - Police vehicle cameras
+- **Sepura** - UK police TETRA radios with BWV
+- **Zepcam** - Body worn cameras (police/NHS)
+- **Digital Barriers, Edesix, Reveal Media** - UK body camera specialists
+- **Motorola Solutions** - ANPR systems, police body cams, TETRA
+
+**CCTV & Surveillance:**
+- **Hikvision** (12 OUIs) - Major UK police/council CCTV supplier
+- **Avigilon** - HD surveillance, ANPR systems
+- **FLIR Systems** - Thermal imaging cameras
 - **Bosch Security** - ANPR, traffic systems
-- **Genetec** - ANPR software platforms
+- **Milestone Systems** - Police VMS (XProtect)
 
-### Medium-Relevance Devices (Yellow)
+**ANPR & Traffic Enforcement:**
+- **Kapsch TrafficCom** ⭐⭐ - London ULEZ & Congestion Charging cameras
+- **Genetec** - ANPR software platforms (AutoVu)
+- **Jenoptik** - Speed/ANPR cameras (UK police)
+- **NDI Recognition Systems** - ANPR specialists
+- **SWARCO** - Traffic management/ANPR
+- **Siemens** - Traffic CCTV, smart city infrastructure
 
-- **Hanwha (Samsung)** - Retail/council CCTV
+**Drones:**
+- **DJI** - Police drones, aerial surveillance (Enterprise/Matrice)
+- **Yuneec** - H520 police drones
+- **Autel Robotics** - Commercial/police drones
+
+### Medium-Relevance Devices (Yellow) - Council/Transport/Retail
+
+**UK Transport & Infrastructure:**
+- **March Networks** ⭐ - Transport for London (TfL) buses/trains surveillance
+- **Siemens** - Smart city cameras, transport systems
+- **360 Vision Technology** - UK PTZ motorway cameras
+
+**UK-Based Manufacturers:**
+- **Wavestore** - UK VMS manufacturer
+- **IndigoVision** - UK IP CCTV specialist
+- **Dedicated Micros** - UK CCTV manufacturer (legacy)
+- **Videcon** - UK CCTV installer/integrator
+
+**Enterprise CCTV:**
+- **Dahua Technology** (8 OUIs) - Council/retail/transport IP cameras
+- **Hanwha/Samsung** (5 OUIs) - Retail/council CCTV, Wisenet series
+- **Cisco Meraki** (3 OUIs) - Enterprise cloud cameras
+- **Uniview** - Growing UK market share
+- **Verkada** - Hybrid cloud CCTV
 - **Vivotek** - IP surveillance cameras
 - **Pelco** - Professional surveillance
 - **Sony** - Government network cameras
+- **Panasonic** - i-PRO cameras, transport systems
+- **Canon, Honeywell, Dallmeier** - Professional security
 
-### Low-Relevance Devices (Green)
+### Low-Relevance Devices (Green) - Consumer
 
-- **Ring (Amazon)** - Consumer doorbell cameras
-- **Nest (Google)** - Cloud security cameras
-- **Ubiquiti** - UniFi Protect systems
-- **Nextbase** - Dash cameras
+**Popular UK Consumer Brands:**
+- **TP-Link** ⭐ - Tapo/Kasa cameras (very popular in UK)
+- **Xiaomi** - Mi/Aqara cameras
+- **Ring (Amazon)** - Consumer doorbell cameras, Stick Up Cam
+- **Google Nest** - Cloud security cameras, Hello Doorbell
+- **Anker/Eufy** - Consumer security cameras
+- **Ubiquiti** (6 OUIs) - UniFi Protect systems
+- **Reolink** - Consumer IP cameras
+- **Arlo, Wyze, Blink** - Cloud cameras
+
+**Dash Cameras:**
+- **Nextbase** - UK dash cam market leader
+- **BlackVue, Garmin, Thinkware, Viofo** - Premium dash cams
 - **GoPro** - Action cameras
 
 ### Updating the Database
