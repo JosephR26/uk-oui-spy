@@ -102,7 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Only alerts on MEDIUM/HIGH relevance
 
 #### Hardware Support
-- ESP32-2432S028R development board
+- ESP32-2432S028 development board
 - ILI9341 TFT display driver
 - Resistive touch controller
 - MicroSD card (SPI, GPIO 5)
@@ -157,7 +157,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - TFT_eSPI v2.5.43
   - NimBLE-Arduino v1.4.1
   - ArduinoJson v6.21.3
-- Optimized build flags for ESP32-2432S028R
+- Optimized build flags for ESP32-2432S028
 - Display driver configuration
 - SPIFFS/LittleFS support
 

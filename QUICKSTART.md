@@ -30,7 +30,7 @@ pio run
 ## Step 3: Upload to ESP32
 
 ```bash
-# Connect ESP32-2432S028R via USB
+# Connect ESP32-2432S028 via USB
 # Auto-detect and upload
 pio run --target upload
 

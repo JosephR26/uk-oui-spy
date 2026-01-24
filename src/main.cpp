@@ -2,7 +2,7 @@
  * UK-OUI-SPY ESP32 v6
  * Portable UK Surveillance Device Detector
  *
- * Hardware: ESP32-2432S028R (2.8" ILI9341 touchscreen)
+ * Hardware: ESP32-2432S028 (2.8" ILI9341 touchscreen)
  * Features: BLE/WiFi scanning, OUI matching, proximity alerts, logging
  */
 
@@ -15,7 +15,7 @@
 #include <vector>
 #include "oui_database.h"
 
-// Pin definitions for ESP32-2432S028R
+// Pin definitions for ESP32-2432S028
 #define SD_CS 5
 #define BUZZER_PIN 25  // Optional buzzer pin
 #define LED_PIN 4      // Optional LED indicator

@@ -24,7 +24,7 @@ UK-OUI-SPY is a specialized surveillance detection tool designed for security re
 
 ### Primary Components
 
-- **ESP32-2432S028R** development board
+- **ESP32-2432S028** development board
   - ESP32 dual-core processor
   - 2.8" ILI9341 TFT touchscreen (240x320)
   - Built-in resistive touch controller

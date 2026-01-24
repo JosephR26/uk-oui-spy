@@ -1,6 +1,6 @@
 # Hardware Setup Guide - UK-OUI-SPY ESP32 v6
 
-Complete hardware assembly and configuration guide for the ESP32-2432S028R surveillance detector.
+Complete hardware assembly and configuration guide for the ESP32-2432S028 surveillance detector.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ Complete hardware assembly and configuration guide for the ESP32-2432S028R surve
 
 ### Primary Hardware
 
-**ESP32-2432S028R Development Board**
+**ESP32-2432S028 Development Board**
 - **Processor**: ESP32 dual-core @ 240MHz
 - **Display**: 2.8" ILI9341 TFT (240x320 pixels)
 - **Touch**: Resistive touch controller
@@ -27,7 +27,7 @@ Complete hardware assembly and configuration guide for the ESP32-2432S028R surve
 - **Price**: ~£15-20 GBP
 
 **Where to buy:**
-- AliExpress: Search "ESP32-2432S028R"
+- AliExpress: Search "ESP32-2432S028"
 - eBay: ESP32 2.8" TFT display
 - Amazon UK: "ESP32 development board with display"
 
@@ -131,7 +131,7 @@ Buzzer Negative (-) → GND
 3. **NEVER reverse polarity** - will damage board
 
 **Charging:**
-- Most ESP32-2432S028R boards have built-in TP4056 charging
+- Most ESP32-2432S028 boards have built-in TP4056 charging
 - Connect USB to charge battery automatically
 - Red LED = charging, Blue/Green LED = charged
 
@@ -139,7 +139,7 @@ Buzzer Negative (-) → GND
 
 ```
 ┌─────────────────────────────────────┐
-│     ESP32-2432S028R (Top View)      │
+│     ESP32-2432S028 (Top View)      │
 │                                     │
 │  ┌─────────────────────────────┐   │
 │  │                             │   │
@@ -200,7 +200,7 @@ Back View:
 ### 3D Printed Cases
 
 **Recommended designs:**
-- Search Thingiverse: "ESP32-2432S028R case"
+- Search Thingiverse: "ESP32-2432S028 case"
 - Printables.com: ESP32 TFT case designs
 
 **Features to look for:**

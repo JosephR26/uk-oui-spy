@@ -198,7 +198,7 @@ uk-oui-spy/
 ## 🎓 Hardware Support
 
 ### ✅ Confirmed Compatible
-- ESP32-2432S028R (primary target)
+- ESP32-2432S028 (primary target)
 - 2.8" ILI9341 TFT display
 - Resistive touch controller
 - MicroSD card (FAT32, 4-32GB)
