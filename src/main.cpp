@@ -37,8 +37,9 @@ enum AlertMode {
     ALERT_VIBRATE = 2
 };
 
-// Detection structure
+// Detection structure - Enhanced for ML analysis
 struct Detection {
+    // Identification
     String macAddress;
     String oui;
     String manufacturer;
@@ -46,9 +47,25 @@ struct Detection {
     RelevanceLevel relevance;
     DeploymentType deployment;
     String notes;
-    int8_t rssi;
-    unsigned long timestamp;
+
+    // Signal strength tracking
+    int8_t rssi;           // Current RSSI
+    int8_t rssiMin;        // Minimum RSSI seen
+    int8_t rssiMax;        // Maximum RSSI seen
+    float rssiAvg;         // Average RSSI
+
+    // Temporal tracking
+    unsigned long timestamp;     // Millis at detection
+    unsigned long unixTime;      // Real Unix timestamp
+    unsigned long firstSeen;     // First detection time
+    unsigned long lastSeen;      // Last detection time
+    int seenCount;               // Number of times detected
+
+    // Connection type
     bool isBLE;
+
+    // Calculated fields
+    bool isStationary;     // Low RSSI variance = fixed infrastructure
 };
 
 // Configuration
@@ -74,6 +91,11 @@ bool scanning = false;
 int scrollOffset = 0;
 bool sdCardAvailable = false;
 
+// Session tracking for ML analysis
+String sessionID = "";
+unsigned long sessionStartTime = 0;
+bool timeValid = false;
+
 // UI state
 int currentScreen = 0; // 0=main, 1=settings, 2=logs
 int selectedRelevanceFilter = -1; // -1=all, 0=low, 1=medium, 2=high
@@ -96,6 +118,8 @@ void playProximityAlert(int8_t rssi, RelevanceLevel relevance);
 void logDetectionToSD(Detection &det);
 String formatMAC(String mac);
 String extractOUI(String mac);
+String generateSessionID();
+void syncNTPTime();
 
 // BLE Scan callback
 class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
@@ -142,6 +166,23 @@ void setup() {
     tft.setCursor(20, 190);
     tft.print("WiFi Scanner...");
     initWiFi();
+
+    // Generate unique session ID for this boot/walk
+    tft.setCursor(20, 210);
+    tft.print("Session ID...");
+    sessionID = generateSessionID();
+    Serial.printf("Session ID: %s\n", sessionID.c_str());
+    tft.print(" OK");
+
+    // Sync time from NTP (requires WiFi)
+    tft.setCursor(20, 230);
+    tft.print("Syncing time...");
+    syncNTPTime();
+    if (timeValid) {
+        tft.print(" OK");
+    } else {
+        tft.print(" SKIP");
+    }
 
     delay(2000);
 
@@ -204,17 +245,55 @@ void initWiFi() {
     Serial.println("WiFi initialized (station mode)");
 }
 
+String generateSessionID() {
+    // Generate unique session ID from ESP32 chip ID + boot time
+    uint64_t chipid = ESP.getEfuseMac();
+    unsigned long bootTime = millis();
+
+    char sessionStr[32];
+    snprintf(sessionStr, sizeof(sessionStr), "%04X%04X-%08lX",
+             (uint16_t)(chipid >> 32), (uint16_t)chipid, bootTime);
+
+    return String(sessionStr);
+}
+
+void syncNTPTime() {
+    // Try to sync time from NTP server (requires WiFi)
+    // Using GMT/UTC timezone
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+
+    Serial.print("Syncing time from NTP...");
+    struct tm timeinfo;
+    int attempts = 0;
+    while (!getLocalTime(&timeinfo) && attempts < 10) {
+        Serial.print(".");
+        delay(500);
+        attempts++;
+    }
+
+    if (attempts < 10) {
+        timeValid = true;
+        sessionStartTime = time(nullptr);
+        Serial.println(" OK!");
+        Serial.printf("Current time: %s", asctime(&timeinfo));
+    } else {
+        timeValid = false;
+        Serial.println(" FAILED");
+        Serial.println("Will use relative timestamps");
+    }
+}
+
 void initSDCard() {
     if (SD.begin(SD_CS)) {
         sdCardAvailable = true;
         Serial.println("SD Card initialized");
         tft.print(" OK");
 
-        // Create log file header if new
+        // Create log file header if new (Enhanced for ML analysis)
         File logFile = SD.open("/detections.csv", FILE_WRITE);
         if (logFile) {
             if (logFile.size() == 0) {
-                logFile.println("Timestamp,MAC,OUI,Manufacturer,Category,Relevance,Deployment,RSSI,Type,Notes");
+                logFile.println("SessionID,UnixTime,Timestamp,MAC,OUI,Manufacturer,Category,Relevance,Deployment,RSSI,RSSIMin,RSSIMax,RSSIAvg,SeenCount,FirstSeen,LastSeen,Duration,Type,IsStationary,Notes");
             }
             logFile.close();
         }
@@ -260,6 +339,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
         if (oui.equalsIgnoreCase(UK_OUI_DATABASE[i].oui)) {
             // Match found!
             Detection det;
+            // Identification
             det.macAddress = mac;
             det.oui = oui;
             det.manufacturer = UK_OUI_DATABASE[i].manufacturer;
@@ -267,9 +347,25 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
             det.relevance = UK_OUI_DATABASE[i].relevance;
             det.deployment = UK_OUI_DATABASE[i].deployment;
             det.notes = UK_OUI_DATABASE[i].notes;
+
+            // Signal strength (will be updated if duplicate)
             det.rssi = rssi;
+            det.rssiMin = rssi;
+            det.rssiMax = rssi;
+            det.rssiAvg = rssi;
+
+            // Temporal (will be updated if duplicate)
             det.timestamp = millis();
+            det.unixTime = timeValid ? time(nullptr) : 0;
+            det.firstSeen = millis();
+            det.lastSeen = millis();
+            det.seenCount = 1;
+
+            // Connection type
             det.isBLE = isBLE;
+
+            // Calculated (will be determined over time)
+            det.isStationary = false;
 
             addDetection(det);
 
@@ -298,9 +394,31 @@ void addDetection(Detection det) {
     unsigned long now = millis();
     for (auto &d : detections) {
         if (d.macAddress == det.macAddress && (now - d.timestamp) < 30000) {
-            // Update existing detection
-            d.rssi = det.rssi;
+            // Update existing detection with enhanced tracking
+
+            // Update RSSI statistics
+            d.rssi = det.rssi;  // Current RSSI
+            if (det.rssi < d.rssiMin) d.rssiMin = det.rssi;
+            if (det.rssi > d.rssiMax) d.rssiMax = det.rssi;
+
+            // Update average RSSI (weighted average)
+            d.rssiAvg = ((d.rssiAvg * d.seenCount) + det.rssi) / (d.seenCount + 1);
+
+            // Update temporal tracking
+            d.seenCount++;
+            d.lastSeen = now;
             d.timestamp = now;
+            d.unixTime = timeValid ? time(nullptr) : 0;
+
+            // Calculate if stationary (low RSSI variance = fixed infrastructure)
+            int rssiVariance = d.rssiMax - d.rssiMin;
+            d.isStationary = (rssiVariance < 15 && d.seenCount >= 3);
+
+            // Log updated detection to SD card
+            if (config.enableLogging && sdCardAvailable) {
+                logDetectionToSD(d);
+            }
+
             return;
         }
     }
@@ -497,17 +615,31 @@ void playProximityAlert(int8_t rssi, RelevanceLevel relevance) {
 void logDetectionToSD(Detection &det) {
     File logFile = SD.open("/detections.csv", FILE_APPEND);
     if (logFile) {
-        logFile.printf("%lu,%s,%s,%s,%s,%s,%s,%d,%s,%s\n",
-            det.timestamp,
-            det.macAddress.c_str(),
-            det.oui.c_str(),
-            det.manufacturer.c_str(),
-            getCategoryName(det.category),
-            getRelevanceName(det.relevance),
-            getDeploymentName(det.deployment),
-            det.rssi,
-            det.isBLE ? "BLE" : "WiFi",
-            det.notes.c_str()
+        // Calculate duration in milliseconds
+        unsigned long duration = det.lastSeen - det.firstSeen;
+
+        // Enhanced ML-ready CSV format (20 columns)
+        logFile.printf("%s,%lu,%lu,%s,%s,%s,%s,%s,%s,%d,%d,%d,%.1f,%d,%lu,%lu,%lu,%s,%s,%s\n",
+            sessionID.c_str(),                    // SessionID
+            det.unixTime,                         // UnixTime (real timestamp)
+            det.timestamp,                        // Timestamp (millis since boot)
+            det.macAddress.c_str(),               // MAC
+            det.oui.c_str(),                      // OUI
+            det.manufacturer.c_str(),             // Manufacturer
+            getCategoryName(det.category),        // Category
+            getRelevanceName(det.relevance),      // Relevance
+            getDeploymentName(det.deployment),    // Deployment
+            det.rssi,                             // RSSI (current)
+            det.rssiMin,                          // RSSIMin
+            det.rssiMax,                          // RSSIMax
+            det.rssiAvg,                          // RSSIAvg (float with 1 decimal)
+            det.seenCount,                        // SeenCount
+            det.firstSeen,                        // FirstSeen
+            det.lastSeen,                         // LastSeen
+            duration,                             // Duration (calculated)
+            det.isBLE ? "BLE" : "WiFi",          // Type
+            det.isStationary ? "FIXED" : "MOBILE", // IsStationary
+            det.notes.c_str()                     // Notes
         );
         logFile.close();
     }
