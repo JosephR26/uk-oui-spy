@@ -566,8 +566,6 @@ const OUIEntry UK_OUI_DATABASE[] = {
 
 const int UK_OUI_DATABASE_SIZE = sizeof(UK_OUI_DATABASE) / sizeof(OUIEntry);
 
-const int UK_OUI_DATABASE_SIZE = sizeof(UK_OUI_DATABASE) / sizeof(OUIEntry);
-
 // Helper functions
 const char* getCategoryName(DeviceCategory cat);
 const char* getRelevanceName(RelevanceLevel rel);
