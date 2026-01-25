@@ -127,7 +127,8 @@ All dependencies are automatically managed by PlatformIO:
 
 **Relevance Color Coding:**
 - **Red Bar** = High relevance (police/government equipment)
-- **Yellow Bar** = Medium relevance (retail/transport CCTV)
+- **Purple Bar** = Facial recognition systems (CRITICAL ALERT)
+- **Yellow Bar** = Medium relevance (retail/transport/council CCTV & parking enforcement)
 - **Green Bar** = Low relevance (consumer cameras)
 
 ### Touch Controls
@@ -156,9 +157,30 @@ The device emits audio alerts based on signal strength (RSSI):
 
 ## OUI Database
 
-The device includes **230+ OUI entries** from UK-relevant surveillance manufacturers (v1.0.1 expansion):
+The device includes **280+ OUI entries** from UK-relevant surveillance manufacturers (v1.0.2 expansion with facial recognition):
 
-### High-Relevance Devices (Red) - Police/Government
+### 🏴󠁧󠁢󠁷󠁬󠁳󠁿 Cardiff & South Wales Coverage
+
+**Critical for Cardiff users:** This device now detects **NEC NeoFace** facial recognition systems used by South Wales Police during their controversial live facial recognition trials (2017-2020). South Wales Police was one of the first UK forces to deploy live FR at public events, sporting matches, and city center locations in Cardiff.
+
+**Cardiff-specific surveillance infrastructure includes:**
+- NEC NeoFace Live FR cameras (deployed at Cardiff events/city center)
+- Council CCTV networks (Telent infrastructure)
+- Parking enforcement cameras (Conduent, NSL Services)
+- Transport surveillance (bus/train cameras)
+- Retail facial recognition trials (Facewatch systems)
+
+### High-Relevance Devices (Red/Purple) - Police/Government
+
+**⚠️ Facial Recognition Systems (Purple):**
+- **NEC Corporation** 🚨 - NeoFace Live FR used by South Wales Police (Cardiff trials 2017-2020)
+- **Cognitec Systems** - FaceVACS facial recognition (German vendor, UK police use)
+- **BriefCam** - Video analytics for retrospective FR (UK police forensics)
+- **Clearview AI** - Controversial FR database (UK police usage reported)
+- **Idemia** (formerly Morpho) - Police biometrics and facial recognition
+- **FaceFirst** - Retail loss prevention facial recognition
+- **AnyVision** (now Oosto) - Retail/transport FR systems
+- **Facewatch** - UK retail facial recognition (Tesco/Co-op trials)
 
 **Body Cameras & Police Equipment:**
 - **Axon Enterprise** ⭐ - UK police body camera standard (Met Police, most UK forces)
@@ -195,6 +217,21 @@ The device includes **230+ OUI entries** from UK-relevant surveillance manufactu
 - **March Networks** ⭐ - Transport for London (TfL) buses/trains surveillance
 - **Siemens** - Smart city cameras, transport systems
 - **360 Vision Technology** - UK PTZ motorway cameras
+
+**Council Parking & Civil Enforcement:**
+- **Conduent** (formerly Xerox) - Major UK parking enforcement contractor
+- **NSL Services** - UK parking/bus lane enforcement cameras
+- **APCOA Parking** - UK car park ANPR systems
+- **ParkingEye** (Capita) - Private parking enforcement
+- **Euro Car Parks** - Private parking ANPR
+- **Smart Parking** - Council smart parking sensors
+
+**Council CCTV Infrastructure:**
+- **Telent** - UK council CCTV network infrastructure
+- **Vicon Industries** - Professional CCTV, council VAX VMS
+- **Oncam** - 360-degree council/transport cameras
+- **BCDVideo** - Surveillance server infrastructure
+- **Thales** - Government/transport security systems
 
 **UK-Based Manufacturers:**
 - **Wavestore** - UK VMS manufacturer

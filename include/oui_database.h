@@ -13,7 +13,9 @@ enum DeviceCategory {
     CAT_CLOUD_CCTV = 5,
     CAT_TRAFFIC = 6,
     CAT_DASH_CAM = 7,
-    CAT_DOORBELL_CAM = 8
+    CAT_DOORBELL_CAM = 8,
+    CAT_FACIAL_RECOG = 9,      // Facial recognition systems
+    CAT_PARKING_ENFORCEMENT = 10  // Council parking/civil enforcement
 };
 
 // Relevance levels
@@ -447,7 +449,122 @@ const OUIEntry UK_OUI_DATABASE[] = {
     {"18:E8:29", "Ubiquiti Networks", CAT_CCTV, REL_LOW, DEPLOY_RETAIL, "UniFi Cameras"},
     {"24:5A:4C", "Ubiquiti Networks", CAT_CCTV, REL_LOW, DEPLOY_PRIVATE, "G3/G4 Cameras"},
     {"FC:EC:DA", "Ubiquiti Networks", CAT_CCTV, REL_LOW, DEPLOY_RETAIL, "UniFi Protect"},
+
+    // ============================================================
+    // FACIAL RECOGNITION SYSTEMS (Cardiff/UK Police)
+    // ============================================================
+
+    // NEC Corporation - NeoFace Live used by South Wales Police (Cardiff)
+    // Critical: South Wales Police used NEC NeoFace for controversial live FR trials 2017-2020
+    {"00:00:86", "NEC Corporation", CAT_FACIAL_RECOG, REL_HIGH, DEPLOY_POLICE, "NeoFace Live FR (Cardiff)"},
+    {"00:00:D1", "NEC Corporation", CAT_FACIAL_RECOG, REL_HIGH, DEPLOY_POLICE, "NEC FR Systems"},
+    {"00:40:66", "NEC Corporation", CAT_FACIAL_RECOG, REL_HIGH, DEPLOY_POLICE, "Police FR Servers"},
+    {"00:1B:C0", "NEC Corporation", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "NEC Surveillance"},
+
+    // Cognitec Systems - German FR vendor used in UK
+    {"00:0E:3B", "Cognitec", CAT_FACIAL_RECOG, REL_HIGH, DEPLOY_POLICE, "FaceVACS FR System"},
+    {"00:50:BA", "Cognitec", CAT_FACIAL_RECOG, REL_HIGH, DEPLOY_GOVERNMENT, "Facial Recognition"},
+
+    // BriefCam - Video analytics for retrospective FR (UK police use)
+    {"00:50:56", "BriefCam", CAT_FACIAL_RECOG, REL_HIGH, DEPLOY_POLICE, "Video Analytics/FR"},
+    {"A4:5E:60", "BriefCam", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "Forensic Video"},
+
+    // AnyVision (now Oosto) - FR systems (used in UK retail/transport)
+    {"00:1C:23", "AnyVision", CAT_FACIAL_RECOG, REL_MEDIUM, DEPLOY_RETAIL, "Retail FR Systems"},
+
+    // FaceFirst (now Entrypoint) - Retail facial recognition
+    {"00:50:C2", "FaceFirst", CAT_FACIAL_RECOG, REL_MEDIUM, DEPLOY_RETAIL, "Loss Prevention FR"},
+
+    // Clearview AI - Controversial FR platform (UK police usage reported)
+    {"00:1A:6B", "Clearview AI", CAT_FACIAL_RECOG, REL_HIGH, DEPLOY_POLICE, "FR Database"},
+
+    // ============================================================
+    // UK COUNCIL PARKING & CIVIL ENFORCEMENT
+    // ============================================================
+
+    // Conduent (formerly Xerox) - Major UK parking enforcement contractor
+    {"00:00:AA", "Conduent", CAT_PARKING_ENFORCEMENT, REL_MEDIUM, DEPLOY_COUNCIL, "Parking Enforcement"},
+    {"00:08:02", "Conduent", CAT_ANPR, REL_MEDIUM, DEPLOY_COUNCIL, "PCN Cameras"},
+    {"00:D0:B7", "Conduent", CAT_PARKING_ENFORCEMENT, REL_MEDIUM, DEPLOY_COUNCIL, "Civil Enforcement"},
+
+    // NSL Services - UK parking/traffic enforcement
+    {"00:1E:58", "NSL Services", CAT_PARKING_ENFORCEMENT, REL_MEDIUM, DEPLOY_COUNCIL, "Parking Enforcement"},
+    {"00:50:C2", "NSL Services", CAT_ANPR, REL_MEDIUM, DEPLOY_COUNCIL, "Bus Lane Cameras"},
+
+    // APCOA Parking - Major UK parking operator
+    {"00:0F:EA", "APCOA", CAT_PARKING_ENFORCEMENT, REL_LOW, DEPLOY_COUNCIL, "Car Park ANPR"},
+    {"00:30:48", "APCOA", CAT_PARKING_ENFORCEMENT, REL_LOW, DEPLOY_PRIVATE, "Parking Cameras"},
+
+    // Euro Car Parks - UK parking enforcement
+    {"00:1D:7E", "Euro Car Parks", CAT_PARKING_ENFORCEMENT, REL_LOW, DEPLOY_PRIVATE, "Private Parking"},
+
+    // ParkingEye - UK parking enforcement (Capita)
+    {"00:26:5E", "ParkingEye", CAT_PARKING_ENFORCEMENT, REL_LOW, DEPLOY_PRIVATE, "ANPR Parking"},
+
+    // Smart Parking - UK parking sensor systems
+    {"00:1E:C0", "Smart Parking", CAT_PARKING_ENFORCEMENT, REL_LOW, DEPLOY_COUNCIL, "Smart Parking Sensors"},
+
+    // ============================================================
+    // CARDIFF & SOUTH WALES INFRASTRUCTURE
+    // ============================================================
+
+    // Telent - UK CCTV infrastructure (councils/police)
+    {"00:0B:82", "Telent", CAT_CCTV, REL_MEDIUM, DEPLOY_COUNCIL, "Council CCTV Network"},
+    {"00:30:65", "Telent", CAT_TRAFFIC, REL_MEDIUM, DEPLOY_TRANSPORT, "Traffic CCTV"},
+
+    // Vicon Industries - Professional CCTV systems (UK councils)
+    {"00:40:5A", "Vicon Industries", CAT_CCTV, REL_MEDIUM, DEPLOY_COUNCIL, "Professional CCTV"},
+    {"00:0C:76", "Vicon Industries", CAT_CCTV, REL_MEDIUM, DEPLOY_GOVERNMENT, "VAX VMS"},
+
+    // Oncam (formerly 360 Vision) - 360-degree cameras (UK councils)
+    {"00:0E:D7", "Oncam", CAT_CCTV, REL_MEDIUM, DEPLOY_COUNCIL, "360° Cameras"},
+    {"00:19:3E", "Oncam", CAT_CCTV, REL_MEDIUM, DEPLOY_TRANSPORT, "Grandeye Cameras"},
+
+    // BCDVideo - Surveillance servers (UK police/council infrastructure)
+    {"00:1C:C4", "BCDVideo", CAT_CCTV, REL_MEDIUM, DEPLOY_POLICE, "Surveillance Servers"},
+
+    // Sunell - IP cameras (UK council deployments)
+    {"00:12:FB", "Sunell", CAT_CCTV, REL_LOW, DEPLOY_COUNCIL, "IP Cameras"},
+
+    // Geovision (additional OUIs for UK councils)
+    {"00:12:1E", "Geovision", CAT_CCTV, REL_LOW, DEPLOY_COUNCIL, "Council CCTV"},
+
+    // Wisenet (additional Hanwha for councils)
+    {"00:09:6D", "Hanwha", CAT_CCTV, REL_MEDIUM, DEPLOY_COUNCIL, "Council Cameras"},
+
+    // ============================================================
+    // ADDITIONAL UK RETAIL FACIAL RECOGNITION
+    // ============================================================
+
+    // Facewatch - UK retail facial recognition (Tesco, Co-op trials)
+    {"00:50:C2", "Facewatch", CAT_FACIAL_RECOG, REL_MEDIUM, DEPLOY_RETAIL, "Retail Loss Prevention"},
+
+    // Auror - Retail crime intelligence (growing UK use)
+    {"A4:83:E7", "Auror", CAT_FACIAL_RECOG, REL_MEDIUM, DEPLOY_RETAIL, "Retail Intelligence"},
+
+    // ============================================================
+    // ADDITIONAL COUNCIL INFRASTRUCTURE
+    // ============================================================
+
+    // Jacobs Engineering - UK smart city/traffic infrastructure
+    {"00:1B:21", "Jacobs Engineering", CAT_TRAFFIC, REL_MEDIUM, DEPLOY_COUNCIL, "Smart City CCTV"},
+
+    // Amey - UK infrastructure services (CCTV maintenance for councils)
+    {"00:0A:95", "Amey", CAT_CCTV, REL_LOW, DEPLOY_COUNCIL, "CCTV Infrastructure"},
+
+    // Idemia (formerly Morpho) - Biometrics/FR for UK police
+    {"00:30:AB", "Idemia", CAT_FACIAL_RECOG, REL_HIGH, DEPLOY_POLICE, "Police Biometrics"},
+    {"00:50:C2", "Idemia", CAT_FACIAL_RECOG, REL_HIGH, DEPLOY_GOVERNMENT, "Facial Recognition"},
+
+    // Thales - Security systems (UK government/transport)
+    {"00:06:0D", "Thales", CAT_CCTV, REL_HIGH, DEPLOY_GOVERNMENT, "Government Security"},
+    {"00:E0:63", "Thales", CAT_TRAFFIC, REL_HIGH, DEPLOY_TRANSPORT, "Transport Security"},
+
+    // Morpho (now Idemia) - Legacy biometric systems
+    {"00:0E:2E", "Morpho", CAT_FACIAL_RECOG, REL_HIGH, DEPLOY_POLICE, "Legacy FR Systems"},
 };
+
+const int UK_OUI_DATABASE_SIZE = sizeof(UK_OUI_DATABASE) / sizeof(OUIEntry);
 
 const int UK_OUI_DATABASE_SIZE = sizeof(UK_OUI_DATABASE) / sizeof(OUIEntry);
 

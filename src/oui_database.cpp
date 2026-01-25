@@ -11,6 +11,8 @@ const char* getCategoryName(DeviceCategory cat) {
         case CAT_TRAFFIC: return "Traffic";
         case CAT_DASH_CAM: return "Dash Cam";
         case CAT_DOORBELL_CAM: return "Doorbell";
+        case CAT_FACIAL_RECOG: return "Face Recog";
+        case CAT_PARKING_ENFORCEMENT: return "Parking";
         default: return "Unknown";
     }
 }
@@ -46,6 +48,8 @@ uint16_t getCategoryColor(DeviceCategory cat) {
         case CAT_TRAFFIC: return TFT_ORANGE;
         case CAT_DASH_CAM: return TFT_CYAN;
         case CAT_DOORBELL_CAM: return TFT_CYAN;
+        case CAT_FACIAL_RECOG: return TFT_PURPLE;  // Highly sensitive
+        case CAT_PARKING_ENFORCEMENT: return TFT_YELLOW;  // Council enforcement
         default: return TFT_WHITE;
     }
 }
