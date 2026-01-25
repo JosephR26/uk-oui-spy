@@ -15,7 +15,8 @@ enum DeviceCategory {
     CAT_DASH_CAM = 7,
     CAT_DOORBELL_CAM = 8,
     CAT_FACIAL_RECOG = 9,      // Facial recognition systems
-    CAT_PARKING_ENFORCEMENT = 10  // Council parking/civil enforcement
+    CAT_PARKING_ENFORCEMENT = 10,  // Council parking/civil enforcement
+    CAT_SMART_CITY_INFRA = 11  // Smart city infrastructure (networked poles/sensors)
 };
 
 // Relevance levels
@@ -562,6 +563,41 @@ const OUIEntry UK_OUI_DATABASE[] = {
 
     // Morpho (now Idemia) - Legacy biometric systems
     {"00:0E:2E", "Morpho", CAT_FACIAL_RECOG, REL_HIGH, DEPLOY_POLICE, "Legacy FR Systems"},
+
+    // ============================================================
+    // CARDIFF SMART CITY INFRASTRUCTURE (Field-tested)
+    // ============================================================
+    // These OUIs were detected on Cardiff's networked smart poles (AGD640-XXXXX-poleX)
+    // Poles are densely deployed in city center, transport hubs, and Principality Stadium area
+    // These are generic WiFi/BLE modules embedded in surveillance/sensor infrastructure
+
+    // Texas Instruments - Embedded wireless modules (detected on Cardiff poles)
+    {"38:AB:41", "Texas Instruments", CAT_SMART_CITY_INFRA, REL_MEDIUM, DEPLOY_COUNCIL, "Cardiff Smart Poles"},
+    {"00:12:4B", "Texas Instruments", CAT_SMART_CITY_INFRA, REL_MEDIUM, DEPLOY_COUNCIL, "IoT Wireless Module"},
+    {"B0:B4:48", "Texas Instruments", CAT_SMART_CITY_INFRA, REL_MEDIUM, DEPLOY_COUNCIL, "CC2640 BLE Module"},
+
+    // TDK Corporation - Industrial wireless modules (detected on Cardiff poles)
+    {"00:80:98", "TDK Corporation", CAT_SMART_CITY_INFRA, REL_MEDIUM, DEPLOY_COUNCIL, "Cardiff Pole Sensors"},
+    {"00:1D:94", "TDK Corporation", CAT_SMART_CITY_INFRA, REL_MEDIUM, DEPLOY_COUNCIL, "Industrial IoT"},
+
+    // Ezurio (formerly Laird Connectivity) - Industrial wireless (detected on Cardiff poles)
+    {"00:16:A4", "Ezurio", CAT_SMART_CITY_INFRA, REL_MEDIUM, DEPLOY_COUNCIL, "Cardiff Smart Infrastructure"},
+    {"00:50:C2", "Ezurio", CAT_SMART_CITY_INFRA, REL_MEDIUM, DEPLOY_COUNCIL, "Industrial Wireless"},
+
+    // Fn-Link Technology - WiFi/BLE modules for smart city (detected on Cardiff poles)
+    {"AC:64:CF", "Fn-Link Technology", CAT_SMART_CITY_INFRA, REL_MEDIUM, DEPLOY_COUNCIL, "Cardiff Pole Network"},
+    {"24:0A:C4", "Fn-Link Technology", CAT_SMART_CITY_INFRA, REL_MEDIUM, DEPLOY_COUNCIL, "Smart City WiFi"},
+
+    // Additional smart city infrastructure vendors
+    // ESP32/ESP8266 modules commonly used in council IoT (if you find these, likely custom builds)
+    {"24:6F:28", "Espressif", CAT_SMART_CITY_INFRA, REL_LOW, DEPLOY_COUNCIL, "ESP32 IoT Module"},
+    {"30:AE:A4", "Espressif", CAT_SMART_CITY_INFRA, REL_LOW, DEPLOY_COUNCIL, "ESP32 WiFi/BLE"},
+
+    // Murata - Industrial WiFi/BLE modules (common in smart city)
+    {"00:37:6D", "Murata", CAT_SMART_CITY_INFRA, REL_LOW, DEPLOY_COUNCIL, "Industrial WiFi Module"},
+
+    // u-blox - Industrial IoT modules
+    {"00:18:DA", "u-blox", CAT_SMART_CITY_INFRA, REL_LOW, DEPLOY_COUNCIL, "Industrial IoT Module"},
 };
 
 const int UK_OUI_DATABASE_SIZE = sizeof(UK_OUI_DATABASE) / sizeof(OUIEntry);
