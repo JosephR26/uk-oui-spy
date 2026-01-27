@@ -19,6 +19,7 @@
 #include "oui_database.h"
 
 // Pin definitions for ESP32-2432S028
+#define TFT_BL 21      // Backlight control (CRITICAL - screen blank without this!)
 #define SD_CS 5
 #define BUZZER_PIN 25  // Optional buzzer pin
 #define LED_PIN 4      // Optional LED indicator
@@ -140,6 +141,11 @@ void setup() {
     pinMode(BUZZER_PIN, OUTPUT);
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
+
+    // Initialize TFT backlight (CRITICAL for ESP32-2432S028!)
+    pinMode(TFT_BL, OUTPUT);
+    digitalWrite(TFT_BL, HIGH);  // Turn on backlight
+    Serial.println("Backlight enabled");
 
     // Initialize display
     initDisplay();
