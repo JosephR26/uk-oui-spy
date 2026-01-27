@@ -18,8 +18,8 @@
 #include <vector>
 #include "oui_database.h"
 
-// Pin definitions for ESP32-2432S028
-#define TFT_BL 21      // Backlight control (CRITICAL - screen blank without this!)
+// Pin definitions for ESP32-2432S028 (Two USB, Capacitive Touch version)
+#define TFT_BL 27      // Backlight control - GPIO 27 for capacitive version!
 #define SD_CS 5
 #define BUZZER_PIN 25  // Optional buzzer pin
 #define LED_PIN 4      // Optional LED indicator
