@@ -1,21 +1,12 @@
 /*
- * UK-OUI-SPY ESP32 v1.1.0
+ * UK-OUI-SPY ESP32
  * Portable UK Surveillance Device Detector
  *
  * Hardware: ESP32-2432S028 (2.8" ILI9341 TFT, capacitive touch)
  * Features: BLE/WiFi scanning, WiFi promiscuous mode, OUI matching,
- *           proximity alerts, logging, settings screen
- *
- * Note: This board uses FT6236 capacitive touch controller (I2C).
- *       For production use, implement proper capacitive touch handling.
- *
- * Version 1.1.0 Changes:
- * - Integrated WiFi promiscuous mode for enhanced device detection
- * - Enabled standard WiFi scanning in main loop
- * - Added full settings screen with toggle controls
+ *           proximity alerts, logging, settings screen, deep sleep,
+ *           threat scoring, swipe UI, OTA updates
  */
-
-#define VERSION "1.1.0"
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -24,6 +15,10 @@
 #include <SD.h>
 #include <SPI.h>
 #include <vector>
+#include <algorithm>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include "esp_sleep.h"
 #include "oui_database.h"
 #include "wifi_promiscuous.h"
 
@@ -76,19 +71,32 @@ struct Detection {
 
     // Calculated fields
     bool isStationary;     // Low RSSI variance = fixed infrastructure
+    float threatScore;     // Composite threat score (0-10)
+};
+
+// Power modes
+enum PowerMode {
+    POWER_ACTIVE = 0,      // Always on, no sleep
+    POWER_LIGHT_SLEEP = 1, // Light sleep between scans
+    POWER_DEEP_SLEEP = 2   // Deep sleep for maximum battery (24+ hours)
 };
 
 // Configuration
 struct Config {
     ScanMode scanMode = SCAN_NORMAL;
     AlertMode alertMode = ALERT_BUZZER;
+    PowerMode powerMode = POWER_ACTIVE;
     bool enableBLE = true;
     bool enableWiFi = true;
-    bool enableWiFiPromiscuous = true;  // Enhanced WiFi packet capture
+    bool enableWiFiPromiscuous = true;
     bool enableLogging = true;
-    int rssiThresholdHigh = -50;   // Very close
-    int rssiThresholdMedium = -70; // Medium distance
-    int rssiThresholdLow = -90;    // Far
+    bool enableDeepSleep = false;       // Deep sleep mode for 24+ hour operation
+    bool policeOnlyFilter = false;      // Filter to show only police/enforcement devices
+    int brightness = 255;               // Display brightness (0-255)
+    int rssiThresholdHigh = -50;
+    int rssiThresholdMedium = -70;
+    int rssiThresholdLow = -90;
+    int deepSleepSeconds = 15;          // Sleep duration between scan cycles
 };
 
 // Global objects
@@ -108,10 +116,22 @@ unsigned long sessionStartTime = 0;
 bool timeValid = false;
 
 // UI state
-int currentScreen = 0; // 0=main, 1=settings, 2=logs
+int currentScreen = 0; // 0=main, 1=settings, 2=logs, 3=ota
 int selectedRelevanceFilter = -1; // -1=all, 0=low, 1=medium, 2=high
-int settingsSelectedItem = 0; // Currently highlighted settings item
-const int SETTINGS_ITEMS = 6;  // Number of settings items
+int settingsSelectedItem = 0;
+const int SETTINGS_ITEMS = 9;  // Expanded settings items
+
+// Touch gesture tracking
+unsigned long touchStartTime = 0;
+uint16_t touchStartX = 0;
+uint16_t touchStartY = 0;
+bool touchActive = false;
+const int SWIPE_THRESHOLD = 50;     // Minimum pixels for swipe
+const int LONG_PRESS_MS = 800;      // Long press threshold
+
+// Deep sleep boot tracking
+RTC_DATA_ATTR int bootCount = 0;
+RTC_DATA_ATTR int totalDetections = 0;
 
 // Function prototypes
 void initDisplay();
@@ -125,14 +145,23 @@ void addDetection(Detection det);
 void updateDisplay();
 void drawMainScreen();
 void drawSettingsScreen();
+void drawOTAScreen();
 void drawDetection(Detection &det, int y, bool highlight);
-void handleTouch();
+void handleTouchGestures();
+void handleLongPress(uint16_t x, uint16_t y);
+void handleTap(uint16_t x, uint16_t y);
 void playProximityAlert(int8_t rssi, RelevanceLevel relevance);
 void logDetectionToSD(Detection &det);
 String formatMAC(String mac);
 String extractOUI(String mac);
 String generateSessionID();
 void syncNTPTime();
+void enterDeepSleep();
+void setBrightness(int level);
+float calculateThreatScore(Detection &det);
+void sortDetectionsByThreat();
+bool fetchOUIUpdates();
+bool isPoliceDevice(DeviceCategory cat);
 
 // BLE Scan callback
 class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
@@ -249,27 +278,111 @@ void loop() {
 
         // WiFi Promiscuous Mode Scanning (probe requests, all management frames)
         if (config.enableWiFiPromiscuous) {
-            // Calculate dwell time per channel based on scan mode
-            int dwellTime = 100;  // ms per channel
+            int dwellTime = 100;
             if (config.scanMode == SCAN_NORMAL) dwellTime = 200;
             if (config.scanMode == SCAN_POWER_SAVE) dwellTime = 300;
 
-            // Temporarily enable promiscuous mode and scan channels
             startWiFiPromiscuous(onWiFiPromiscuousPacket);
             scanAllChannels(onWiFiPromiscuousPacket, dwellTime);
             stopWiFiPromiscuous();
         }
 
+        // Sort detections by threat score
+        sortDetectionsByThreat();
+
         scanning = false;
         digitalWrite(LED_PIN, LOW);
         lastScanTime = currentTime;
         updateDisplay();
+
+        // Deep sleep mode for extended battery life
+        if (config.enableDeepSleep && detections.empty()) {
+            enterDeepSleep();
+        }
     }
 
-    // Handle touch input
-    handleTouch();
+    // Handle touch gestures (swipe, long-press)
+    handleTouchGestures();
 
     delay(50);
+}
+
+// Deep sleep for 24+ hour battery operation
+void enterDeepSleep() {
+    Serial.printf("Entering deep sleep for %d seconds...\n", config.deepSleepSeconds);
+
+    // Save state to RTC memory
+    totalDetections += detections.size();
+    bootCount++;
+
+    // Turn off display and peripherals
+    digitalWrite(TFT_BL, LOW);
+    digitalWrite(LED_PIN, LOW);
+
+    // Configure wakeup timer
+    esp_sleep_enable_timer_wakeup(config.deepSleepSeconds * 1000000ULL);
+
+    // Enter deep sleep
+    esp_deep_sleep_start();
+}
+
+// Set display brightness (PWM)
+void setBrightness(int level) {
+    config.brightness = constrain(level, 0, 255);
+    analogWrite(TFT_BL, config.brightness);
+}
+
+// Check if device is police/enforcement related
+bool isPoliceDevice(DeviceCategory cat) {
+    return (cat == CAT_BODY_CAM || cat == CAT_ANPR ||
+            cat == CAT_DRONE || cat == CAT_FACIAL_RECOG);
+}
+
+// Calculate threat score: recency(0.6) + cluster_density(0.25) + relevance(0.15)
+float calculateThreatScore(Detection &det) {
+    float score = 0.0;
+
+    // Recency factor (0.6 weight) - more recent = higher score
+    unsigned long age = millis() - det.lastSeen;
+    float recencyScore = 10.0 * exp(-age / 60000.0);  // Decay over 1 minute
+    score += recencyScore * 0.6;
+
+    // Cluster density factor (0.25 weight) - more sightings = higher score
+    float densityScore = min(10.0f, det.seenCount * 2.0f);
+    score += densityScore * 0.25;
+
+    // Relevance factor (0.15 weight)
+    float relevanceScore = 0.0;
+    switch(det.relevance) {
+        case REL_HIGH: relevanceScore = 10.0; break;
+        case REL_MEDIUM: relevanceScore = 6.0; break;
+        case REL_LOW: relevanceScore = 3.0; break;
+    }
+    score += relevanceScore * 0.15;
+
+    // Boost for police/enforcement devices
+    if (isPoliceDevice(det.category)) {
+        score = min(10.0f, score * 1.5f);
+    }
+
+    // Boost for very close proximity
+    if (det.rssi > config.rssiThresholdHigh) {
+        score = min(10.0f, score * 1.3f);
+    }
+
+    return score;
+}
+
+// Sort detections by threat score (highest first)
+void sortDetectionsByThreat() {
+    for (auto &det : detections) {
+        det.threatScore = calculateThreatScore(det);
+    }
+
+    std::sort(detections.begin(), detections.end(),
+        [](const Detection &a, const Detection &b) {
+            return a.threatScore > b.threatScore;
+        });
 }
 
 void initDisplay() {
@@ -482,6 +595,8 @@ void updateDisplay() {
         drawMainScreen();
     } else if (currentScreen == 1) {
         drawSettingsScreen();
+    } else if (currentScreen == 3) {
+        drawOTAScreen();
     }
 }
 
@@ -520,12 +635,26 @@ void drawMainScreen() {
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
     tft.print("[S]");
 
-    // Scan mode
+    // Scan mode and filters
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
     tft.setCursor(5, 20);
     tft.printf("Mode: %s",
         config.scanMode == SCAN_QUICK ? "QUICK" :
         config.scanMode == SCAN_NORMAL ? "NORMAL" : "POWER-SAVE");
+
+    // Police filter indicator
+    if (config.policeOnlyFilter) {
+        tft.setTextColor(TFT_RED, TFT_BLACK);
+        tft.setCursor(180, 20);
+        tft.print("[POLICE]");
+    }
+
+    // Deep sleep indicator
+    if (config.enableDeepSleep) {
+        tft.setTextColor(TFT_BLUE, TFT_BLACK);
+        tft.setCursor(260, 20);
+        tft.print("ZZZ");
+    }
 
     // Divider
     tft.drawLine(0, 30, 320, 30, TFT_DARKGREY);
@@ -546,6 +675,11 @@ void drawMainScreen() {
         for (auto &det : detections) {
             // Apply relevance filter
             if (selectedRelevanceFilter >= 0 && det.relevance != selectedRelevanceFilter) {
+                continue;
+            }
+
+            // Apply police-only filter
+            if (config.policeOnlyFilter && !isPoliceDevice(det.category)) {
                 continue;
             }
 
@@ -580,11 +714,22 @@ void drawDetection(Detection &det, int y, bool highlight) {
     tft.setCursor(8, y + 1);
     tft.print(det.manufacturer);
 
-    // Category and RSSI
+    // Category, RSSI, and threat score
     tft.setTextColor(catColor, bgColor);
     tft.fillRect(5, y + 11, 315, 10, bgColor);
     tft.setCursor(8, y + 12);
     tft.printf("%s | RSSI:%d", getCategoryName(det.category), det.rssi);
+
+    // Threat score indicator
+    if (det.threatScore >= 7.0) {
+        tft.setTextColor(TFT_RED, bgColor);
+        tft.setCursor(250, y + 12);
+        tft.printf("T:%.1f!", det.threatScore);
+    } else if (det.threatScore >= 4.0) {
+        tft.setTextColor(TFT_ORANGE, bgColor);
+        tft.setCursor(250, y + 12);
+        tft.printf("T:%.1f", det.threatScore);
+    }
 
     // MAC and Type
     tft.setTextColor(TFT_CYAN, bgColor);
@@ -611,7 +756,7 @@ void drawSettingsScreen() {
     tft.setCursor(100, 5);
     tft.print("SETTINGS");
 
-    // Back button indicator
+    // Back button
     tft.setTextSize(1);
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
     tft.setCursor(5, 8);
@@ -619,129 +764,318 @@ void drawSettingsScreen() {
 
     tft.drawLine(0, 25, 320, 25, TFT_DARKGREY);
 
-    // Settings items
-    int y = 35;
-    int itemHeight = 32;
+    int y = 28;
+    int itemHeight = 22;
 
-    // Helper to draw a toggle switch
+    // Helper to draw toggle
     auto drawToggle = [&](int itemY, bool enabled) {
-        int toggleX = 260;
-        int toggleY = itemY + 8;
+        int toggleX = 270;
+        int toggleY = itemY + 3;
         if (enabled) {
-            tft.fillRoundRect(toggleX, toggleY, 40, 16, 8, TFT_GREEN);
-            tft.fillCircle(toggleX + 28, toggleY + 8, 6, TFT_WHITE);
+            tft.fillRoundRect(toggleX, toggleY, 36, 14, 7, TFT_GREEN);
+            tft.fillCircle(toggleX + 25, toggleY + 7, 5, TFT_WHITE);
         } else {
-            tft.fillRoundRect(toggleX, toggleY, 40, 16, 8, TFT_DARKGREY);
-            tft.fillCircle(toggleX + 12, toggleY + 8, 6, TFT_WHITE);
+            tft.fillRoundRect(toggleX, toggleY, 36, 14, 7, TFT_DARKGREY);
+            tft.fillCircle(toggleX + 11, toggleY + 7, 5, TFT_WHITE);
         }
     };
 
-    // Helper to draw setting row
-    auto drawSettingRow = [&](int index, const char* label, const char* value, bool isToggle, bool toggleState) {
-        int itemY = y + (index * itemHeight);
-        bool selected = (settingsSelectedItem == index);
+    // Helper to draw row
+    auto drawRow = [&](int idx, const char* label, const char* val, bool isToggle, bool state) {
+        int itemY = y + (idx * itemHeight);
+        bool sel = (settingsSelectedItem == idx);
 
-        // Background highlight
-        if (selected) {
-            tft.fillRect(0, itemY, 320, itemHeight - 2, TFT_NAVY);
+        if (sel) {
+            tft.fillRect(0, itemY, 320, itemHeight - 1, TFT_NAVY);
+            tft.fillRect(0, itemY, 3, itemHeight - 1, TFT_CYAN);
         }
 
-        // Selection indicator
-        if (selected) {
-            tft.fillRect(0, itemY, 4, itemHeight - 2, TFT_CYAN);
-        }
-
-        // Label
         tft.setTextSize(1);
-        tft.setTextColor(TFT_WHITE, selected ? TFT_NAVY : TFT_BLACK);
-        tft.setCursor(10, itemY + 4);
+        tft.setTextColor(TFT_WHITE, sel ? TFT_NAVY : TFT_BLACK);
+        tft.setCursor(8, itemY + 4);
         tft.print(label);
 
-        // Value or Toggle
         if (isToggle) {
-            drawToggle(itemY, toggleState);
+            drawToggle(itemY, state);
         } else {
-            tft.setTextColor(TFT_YELLOW, selected ? TFT_NAVY : TFT_BLACK);
-            tft.setCursor(10, itemY + 16);
-            tft.print(value);
+            tft.setTextColor(TFT_YELLOW, sel ? TFT_NAVY : TFT_BLACK);
+            tft.setCursor(160, itemY + 4);
+            tft.print(val);
         }
-
-        // Separator
-        tft.drawLine(0, itemY + itemHeight - 2, 320, itemY + itemHeight - 2, TFT_DARKGREY);
     };
 
-    // Draw all settings
-    const char* scanModeStr = config.scanMode == SCAN_QUICK ? "QUICK (2s)" :
-                              config.scanMode == SCAN_NORMAL ? "NORMAL (5s)" : "POWER-SAVE (15s)";
-    drawSettingRow(0, "Scan Mode", scanModeStr, false, false);
+    // Draw settings (9 items)
+    const char* scanModeStr = config.scanMode == SCAN_QUICK ? "QUICK" :
+                              config.scanMode == SCAN_NORMAL ? "NORMAL" : "POWER-SAVE";
+    drawRow(0, "Scan Mode", scanModeStr, false, false);
 
-    const char* alertModeStr = config.alertMode == ALERT_SILENT ? "SILENT" :
-                               config.alertMode == ALERT_BUZZER ? "BUZZER" : "VIBRATE";
-    drawSettingRow(1, "Alert Mode", alertModeStr, false, false);
+    const char* alertStr = config.alertMode == ALERT_SILENT ? "SILENT" :
+                           config.alertMode == ALERT_BUZZER ? "BUZZER" : "VIBRATE";
+    drawRow(1, "Alert Mode", alertStr, false, false);
 
-    drawSettingRow(2, "BLE Scanning", "", true, config.enableBLE);
-    drawSettingRow(3, "WiFi Scanning", "", true, config.enableWiFi);
-    drawSettingRow(4, "WiFi Promiscuous", "", true, config.enableWiFiPromiscuous);
-    drawSettingRow(5, "SD Card Logging", "", true, config.enableLogging);
+    drawRow(2, "BLE Scanning", "", true, config.enableBLE);
+    drawRow(3, "WiFi Scanning", "", true, config.enableWiFi);
+    drawRow(4, "WiFi Promiscuous", "", true, config.enableWiFiPromiscuous);
+    drawRow(5, "SD Card Logging", "", true, config.enableLogging);
+    drawRow(6, "Deep Sleep Mode", "", true, config.enableDeepSleep);
+    drawRow(7, "Police Filter", "", true, config.policeOnlyFilter);
 
-    // Footer with instructions
+    // OTA Update button
+    int itemY = y + (8 * itemHeight);
+    bool sel = (settingsSelectedItem == 8);
+    if (sel) {
+        tft.fillRect(0, itemY, 320, itemHeight - 1, TFT_NAVY);
+        tft.fillRect(0, itemY, 3, itemHeight - 1, TFT_CYAN);
+    }
+    tft.setTextColor(TFT_ORANGE, sel ? TFT_NAVY : TFT_BLACK);
+    tft.setCursor(8, itemY + 4);
+    tft.print("OTA Database Update...");
+
+    // Footer
     tft.drawLine(0, 230, 320, 230, TFT_DARKGREY);
     tft.setTextSize(1);
     tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-    tft.setCursor(30, 235);
-    tft.print("Touch: UP/DOWN=Select  RIGHT=Toggle");
+    tft.setCursor(50, 235);
+    tft.print("Swipe: Navigate | Tap: Toggle");
 }
 
-void handleTouch() {
+// OTA Update screen
+void drawOTAScreen() {
+    tft.fillScreen(TFT_BLACK);
+
+    // Header
+    tft.setTextSize(2);
+    tft.setTextColor(TFT_ORANGE, TFT_BLACK);
+    tft.setCursor(60, 5);
+    tft.print("OTA UPDATE");
+
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.setCursor(5, 8);
+    tft.print("< BACK");
+
+    tft.drawLine(0, 25, 320, 25, TFT_DARKGREY);
+
+    // Instructions
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setCursor(10, 40);
+    tft.print("Fetches latest OUI database from GitHub.");
+    tft.setCursor(10, 55);
+    tft.print("Requires WiFi connection.");
+
+    tft.setCursor(10, 80);
+    tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    tft.printf("Current entries: %d", UK_OUI_DATABASE_SIZE);
+
+    // Fetch button
+    tft.fillRoundRect(80, 110, 160, 40, 8, TFT_BLUE);
+    tft.setTextSize(2);
+    tft.setTextColor(TFT_WHITE, TFT_BLUE);
+    tft.setCursor(100, 120);
+    tft.print("FETCH NOW");
+
+    // Status area
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+    tft.setCursor(10, 170);
+    tft.print("Status: Ready");
+
+    tft.setCursor(10, 200);
+    tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    tft.print("Tap button to check for updates");
+}
+
+// Fetch OUI updates from GitHub
+bool fetchOUIUpdates() {
+    tft.fillRect(10, 170, 300, 20, TFT_BLACK);
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.setCursor(10, 170);
+    tft.print("Status: Connecting...");
+
+    // Connect to WiFi if not connected
+    if (WiFi.status() != WL_CONNECTED) {
+        // Try to connect to a known network or start captive portal
+        tft.fillRect(10, 170, 300, 20, TFT_BLACK);
+        tft.setTextColor(TFT_RED, TFT_BLACK);
+        tft.setCursor(10, 170);
+        tft.print("Status: WiFi not connected");
+        tft.setCursor(10, 185);
+        tft.print("Connect to WiFi first via captive portal");
+        return false;
+    }
+
+    HTTPClient http;
+    http.begin("https://raw.githubusercontent.com/JosephR26/uk-oui-spy/main/data/oui_updates.json");
+
+    tft.fillRect(10, 170, 300, 20, TFT_BLACK);
+    tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    tft.setCursor(10, 170);
+    tft.print("Status: Fetching...");
+
+    int httpCode = http.GET();
+
+    if (httpCode == HTTP_CODE_OK) {
+        String payload = http.getString();
+
+        // Parse JSON and count new OUIs
+        StaticJsonDocument<4096> doc;
+        DeserializationError error = deserializeJson(doc, payload);
+
+        if (!error) {
+            int newCount = doc["count"] | 0;
+            const char* version = doc["version"] | "unknown";
+
+            tft.fillRect(10, 170, 300, 50, TFT_BLACK);
+            tft.setTextColor(TFT_GREEN, TFT_BLACK);
+            tft.setCursor(10, 170);
+            tft.printf("Status: Success! v%s", version);
+            tft.setCursor(10, 185);
+            tft.printf("New OUIs available: %d", newCount);
+            tft.setCursor(10, 200);
+            tft.print("Restart to apply updates");
+
+            http.end();
+            return true;
+        }
+    }
+
+    tft.fillRect(10, 170, 300, 20, TFT_BLACK);
+    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.setCursor(10, 170);
+    tft.printf("Status: Failed (HTTP %d)", httpCode);
+
+    http.end();
+    return false;
+}
+
+// Advanced touch gesture handling with swipe and long-press
+void handleTouchGestures() {
     uint16_t x = 0, y = 0;
     bool pressed = tft.getTouch(&x, &y);
 
-    if (!pressed) return;
+    if (pressed && !touchActive) {
+        // Touch started
+        touchActive = true;
+        touchStartTime = millis();
+        touchStartX = x;
+        touchStartY = y;
+    }
+    else if (!pressed && touchActive) {
+        // Touch ended - analyze gesture
+        touchActive = false;
+        unsigned long touchDuration = millis() - touchStartTime;
+        int deltaX = x - touchStartX;
+        int deltaY = y - touchStartY;
 
-    // Debounce delay
-    delay(200);
+        // Long press detection (800ms+)
+        if (touchDuration >= LONG_PRESS_MS && abs(deltaX) < 20 && abs(deltaY) < 20) {
+            handleLongPress(touchStartX, touchStartY);
+            return;
+        }
 
+        // Swipe detection
+        if (abs(deltaY) > SWIPE_THRESHOLD && abs(deltaY) > abs(deltaX)) {
+            // Vertical swipe - scroll detection list
+            if (currentScreen == 0) {
+                if (deltaY > 0) {
+                    // Swipe down - scroll up
+                    scrollOffset = max(0, scrollOffset - 1);
+                } else {
+                    // Swipe up - scroll down
+                    scrollOffset = min((int)detections.size() - 1, scrollOffset + 1);
+                }
+                updateDisplay();
+                return;
+            }
+        }
+
+        if (abs(deltaX) > SWIPE_THRESHOLD && abs(deltaX) > abs(deltaY)) {
+            // Horizontal swipe
+            if (currentScreen == 0) {
+                if (deltaX > 0) {
+                    // Swipe right - open settings
+                    currentScreen = 1;
+                    settingsSelectedItem = 0;
+                } else {
+                    // Swipe left - cycle filter
+                    selectedRelevanceFilter = (selectedRelevanceFilter + 1) % 4;
+                    if (selectedRelevanceFilter == 3) selectedRelevanceFilter = -1;
+                }
+                updateDisplay();
+                return;
+            }
+            else if (currentScreen == 1 && deltaX > 0) {
+                // Swipe right in settings - go back
+                currentScreen = 0;
+                updateDisplay();
+                return;
+            }
+        }
+
+        // Regular tap
+        handleTap(touchStartX, touchStartY);
+    }
+}
+
+// Handle long press - police filter + brightness control
+void handleLongPress(uint16_t x, uint16_t y) {
     if (currentScreen == 0) {
-        // Main screen touch handling
+        if (y < 120) {
+            // Top half - toggle police-only filter
+            config.policeOnlyFilter = !config.policeOnlyFilter;
+            // Quick feedback beep
+            tone(BUZZER_PIN, 1000, 50);
+        } else {
+            // Bottom half - cycle brightness
+            config.brightness = (config.brightness + 64) % 256;
+            if (config.brightness == 0) config.brightness = 64;
+            setBrightness(config.brightness);
+        }
+        updateDisplay();
+    }
+}
+
+// Handle regular tap
+void handleTap(uint16_t x, uint16_t y) {
+    if (currentScreen == 0) {
+        // Main screen
         if (y < 30) {
-            if (x > 250) {
-                // Top right - open settings
+            if (x > 280) {
+                // Settings icon area
                 currentScreen = 1;
                 settingsSelectedItem = 0;
-                updateDisplay();
             } else {
-                // Header area - cycle scan mode
+                // Header - cycle scan mode
                 config.scanMode = (ScanMode)((config.scanMode + 1) % 3);
                 switch(config.scanMode) {
                     case SCAN_QUICK: scanInterval = 2000; break;
                     case SCAN_NORMAL: scanInterval = 5000; break;
                     case SCAN_POWER_SAVE: scanInterval = 15000; break;
                 }
-                updateDisplay();
             }
+            updateDisplay();
         } else if (y > 230) {
-            // Footer area - toggle filter
+            // Footer - toggle filter
             selectedRelevanceFilter = (selectedRelevanceFilter + 1) % 4;
             if (selectedRelevanceFilter == 3) selectedRelevanceFilter = -1;
             updateDisplay();
         }
     }
     else if (currentScreen == 1) {
-        // Settings screen touch handling
+        // Settings screen
         if (y < 25) {
-            // Back button area
             currentScreen = 0;
             updateDisplay();
             return;
         }
 
-        // Calculate which item was touched
-        int itemHeight = 32;
+        int itemHeight = 26;
         int touchedItem = (y - 35) / itemHeight;
 
         if (touchedItem >= 0 && touchedItem < SETTINGS_ITEMS) {
             if (x > 200) {
-                // Right side - toggle/change value
+                // Toggle/change value
                 switch(touchedItem) {
                     case 0: // Scan Mode
                         config.scanMode = (ScanMode)((config.scanMode + 1) % 3);
@@ -766,10 +1100,29 @@ void handleTouch() {
                     case 5: // SD Card Logging
                         config.enableLogging = !config.enableLogging;
                         break;
+                    case 6: // Deep Sleep
+                        config.enableDeepSleep = !config.enableDeepSleep;
+                        break;
+                    case 7: // Police Filter
+                        config.policeOnlyFilter = !config.policeOnlyFilter;
+                        break;
+                    case 8: // OTA Update
+                        currentScreen = 3;
+                        break;
                 }
             }
             settingsSelectedItem = touchedItem;
             updateDisplay();
+        }
+    }
+    else if (currentScreen == 3) {
+        // OTA screen
+        if (y < 25) {
+            currentScreen = 1;
+            updateDisplay();
+        } else if (y > 100 && y < 160) {
+            // Fetch updates button
+            fetchOUIUpdates();
         }
     }
 }
