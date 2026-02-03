@@ -1,4 +1,4 @@
-# UK-OUI-SPY ESP32 v6
+# UK-OUI-SPY ESP32 
 
 A portable, discreet device that detects, logs, and alerts on UK-relevant surveillance and law-enforcement devices via their Bluetooth/Wi-Fi MAC addresses (OUIs), optimized for field use, analysis, and security awareness.
 

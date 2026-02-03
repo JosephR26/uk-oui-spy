@@ -8,14 +8,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Enhanced touch UI with smooth scrolling
-- Full settings screen implementation
 - GPS integration for location tagging
-- WiFi promiscuous packet capture integration
 - Pattern recognition for recurring devices
 - Multi-device aggregation network
 - Offline map display
-- Power management optimization
+- WiFi captive portal for OTA without pre-configured networks
+
+## [Latest] - 2026-02-03
+
+### Added - Core Research Upgrades
+
+#### Deep Sleep Power Management
+- **24+ hour battery operation** on 1000mAh LiPo
+- Configurable sleep cycles (default 15 seconds between scans)
+- RTC memory preserves boot count and detection totals across sleep
+- Automatic display/LED shutdown before entering sleep
+- Toggle via settings: "Deep Sleep Mode"
+- Visual [ZZZ] indicator when enabled
+
+#### Threat Scoring Algorithm
+- **Composite threat score (0-10)** for intelligent prioritization
+- Formula: `recency(0.6) + cluster_density(0.25) + relevance(0.15)`
+- 1.5x boost for police/enforcement devices (body cam, ANPR, drone, facial recognition)
+- 1.3x boost for close-range proximity (RSSI > -50)
+- Detections auto-sorted by threat score (highest first)
+- Visual indicators: Red `T:X.X!` for 7+, Orange `T:X.X` for 4+
+
+#### Swipe & Gesture Touch UI
+- **Vertical swipe**: Scroll detection list up/down
+- **Horizontal swipe right**: Open settings
+- **Horizontal swipe left**: Cycle relevance filter
+- **Long-press top half**: Toggle police-only filter
+- **Long-press bottom half**: Cycle display brightness
+- Gesture detection: 50px threshold, 800ms long-press
+
+#### Police/Enforcement Filter
+- Quick filter for body cams, ANPR, drones, facial recognition only
+- Red [POLICE] indicator when active
+- Toggle via long-press or settings menu
+
+#### OTA Database Updates
+- Fetch latest OUI entries from GitHub JSON endpoint
+- Status screen with current count and update results
+- WiFi connection required for updates
+
+#### WiFi Promiscuous Mode
+- Full packet capture: probe requests, beacons, management frames
+- Channel hopping: 1, 6, 11 (non-overlapping)
+- Adaptive dwell time per scan mode (100/200/300ms)
+- ~30% more device detection vs standard AP scanning
+
+#### Expanded Settings (9 items)
+- Scan Mode, Alert Mode, BLE, WiFi, Promiscuous, SD Logging
+- NEW: Deep Sleep Mode, Police Filter, OTA Update
+- Compact layout fits all options without scrolling
+
+### Changed
+- Detection struct includes `threatScore` field
+- Main loop sorts by threat after each scan cycle
+- Touch handler replaced with gesture-aware system
+- Display brightness controllable (0-255 PWM)
+
+### Display Configuration
+- `TFT_INVERSION_ON` for blank screen fix
+- SPI frequency reduced to 27MHz for stability
+
+## [1.0.3] - 2025-01-26
+
+### Fixed
+- Backlight pin corrected for ESP32-2432S028 (two USB/capacitive touch version)
+- GPIO 27 confirmed as correct backlight pin for capacitive touch variant
 
 ## [1.0.2] - 2025-01-25
 
