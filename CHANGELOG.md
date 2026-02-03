@@ -9,13 +9,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 - Enhanced touch UI with smooth scrolling
-- Full settings screen implementation
 - GPS integration for location tagging
-- WiFi promiscuous packet capture integration
 - Pattern recognition for recurring devices
 - Multi-device aggregation network
 - Offline map display
 - Power management optimization
+
+## [1.1.0] - 2026-02-03
+
+### Added - WiFi Promiscuous Mode & Settings Screen
+
+#### WiFi Promiscuous Mode Integration
+- **Full promiscuous mode scanning** now integrated into main loop
+- Captures probe requests, beacons, and all WiFi management frames
+- Channel hopping across 1, 6, 11 (non-overlapping channels)
+- Dwell time adjusts based on scan mode (Quick: 100ms, Normal: 200ms, Power-Save: 300ms)
+- Significantly enhanced device detection capability beyond standard WiFi scanning
+- Deduplication cache prevents repeated alerts for same device
+
+#### Standard WiFi Scanning
+- **WiFi network scanning** now enabled in main loop alongside BLE
+- Scans for access points and captures BSSID/RSSI for OUI matching
+- Complements promiscuous mode with beacon-based detection
+
+#### Settings Screen
+- **Full interactive settings screen** with touch controls
+- Toggle switches for: BLE Scanning, WiFi Scanning, WiFi Promiscuous, SD Logging
+- Scan mode selector: Quick / Normal / Power-Save
+- Alert mode selector: Silent / Buzzer / Vibrate
+- Visual feedback with highlighted selection
+- Back button to return to main screen
+- Settings accessible via [S] indicator in header
+
+#### Display Configuration Improvements
+- Added `TFT_INVERSION_ON` flag for better display compatibility
+- Reduced SPI frequency to 27MHz for improved stability
+- Fixes potential blank screen issues on some ESP32-2432S028 variants
+
+### Changed
+- Version updated to 1.1.0
+- Main loop now performs BLE + WiFi + Promiscuous scanning in sequence
+- Touch handler supports both main and settings screens
+- Added settings gear indicator [S] to main screen header
+
+### Technical Details
+- New config option: `enableWiFiPromiscuous` (default: true)
+- Promiscuous callback converts MAC bytes to string format for OUI matching
+- Settings screen uses lambda functions for clean toggle rendering
+- 6 configurable settings items with visual feedback
+
+## [1.0.3] - 2025-01-26
+
+### Fixed
+- Backlight pin corrected for ESP32-2432S028 (two USB/capacitive touch version)
+- GPIO 27 confirmed as correct backlight pin for capacitive touch variant
 
 ## [1.0.2] - 2025-01-25
 

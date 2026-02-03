@@ -1,11 +1,11 @@
-# UK-OUI-SPY ESP32 v6 - Project Status
+# UK-OUI-SPY ESP32 v1.1.0 - Project Status
 
-## ✅ Project Complete - Version 1.0.0
+## ✅ Project Complete - Version 1.1.0
 
 **Repository**: uk-oui-spy
-**Branch**: claude/esp32-surveillance-detector-aOG7T
+**Branch**: claude/continue-work-fcoVW
 **Status**: Production Ready
-**Last Updated**: 2025-01-11
+**Last Updated**: 2026-02-03
 
 ---
 
@@ -144,20 +144,26 @@
 
 ---
 
-## 🔬 Advanced Features (Framework Ready)
+## 🔬 Advanced Features (v1.1.0 Complete)
 
-### ⏳ WiFi Promiscuous Mode
+### ✅ WiFi Promiscuous Mode (Integrated in v1.1.0)
 - [x] Header file (wifi_promiscuous.h)
 - [x] Implementation (wifi_promiscuous.cpp)
 - [x] Packet capture callbacks
 - [x] MAC extraction
-- [x] Channel scanning
+- [x] Channel scanning (1, 6, 11)
 - [x] Deduplication cache
-- [ ] Integration into main.cpp (planned v1.1)
+- [x] **Integration into main.cpp** ✅
 
-### ⏳ Enhanced UI (Planned v1.1)
+### ✅ Settings Screen (Implemented in v1.1.0)
+- [x] Full interactive settings screen
+- [x] Toggle controls for all scan options
+- [x] Scan mode selection
+- [x] Alert mode selection
+- [x] Touch navigation
+
+### ⏳ Enhanced UI (Planned v1.2)
 - [ ] Scrollable detection list
-- [ ] Full settings screen
 - [ ] Brightness control
 - [ ] Custom filters
 
@@ -295,22 +301,24 @@ uk-oui-spy/
 
 ## 🚀 Next Steps (Future Development)
 
-### Version 1.1 (Planned Q2 2025)
-- Integrate WiFi promiscuous mode
-- Scrollable UI
-- Full settings screen
-- Dynamic OUI loading from SD
+### Version 1.1.0 ✅ (Released 2026-02-03)
+- ✅ Integrate WiFi promiscuous mode
+- ✅ Full settings screen
+- ✅ Standard WiFi scanning enabled
+- ✅ Display configuration improvements
 
-### Version 1.2 (Planned Q3 2025)
+### Version 1.2 (Planned)
+- Scrollable detection list UI
 - GPS integration
 - Location tagging
-- Offline maps
+- Dynamic OUI loading from SD
 - Encrypted logging
 
-### Version 2.0 (Planned Q4 2025)
+### Version 2.0 (Planned)
 - Pattern recognition
 - Device tracking
 - Multi-unit networking
+- Offline maps
 - Mobile app
 
 ---

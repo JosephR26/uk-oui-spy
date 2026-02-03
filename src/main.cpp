@@ -1,13 +1,21 @@
 /*
- * UK-OUI-SPY ESP32 v6
+ * UK-OUI-SPY ESP32 v1.1.0
  * Portable UK Surveillance Device Detector
  *
  * Hardware: ESP32-2432S028 (2.8" ILI9341 TFT, capacitive touch)
- * Features: BLE/WiFi scanning, OUI matching, proximity alerts, logging
+ * Features: BLE/WiFi scanning, WiFi promiscuous mode, OUI matching,
+ *           proximity alerts, logging, settings screen
  *
  * Note: This board uses FT6236 capacitive touch controller (I2C).
  *       For production use, implement proper capacitive touch handling.
+ *
+ * Version 1.1.0 Changes:
+ * - Integrated WiFi promiscuous mode for enhanced device detection
+ * - Enabled standard WiFi scanning in main loop
+ * - Added full settings screen with toggle controls
  */
+
+#define VERSION "1.1.0"
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -17,6 +25,7 @@
 #include <SPI.h>
 #include <vector>
 #include "oui_database.h"
+#include "wifi_promiscuous.h"
 
 // Pin definitions for ESP32-2432S028 (Two USB, Capacitive Touch version)
 #define TFT_BL 27      // Backlight control - GPIO 27 for capacitive version!
@@ -75,6 +84,7 @@ struct Config {
     AlertMode alertMode = ALERT_BUZZER;
     bool enableBLE = true;
     bool enableWiFi = true;
+    bool enableWiFiPromiscuous = true;  // Enhanced WiFi packet capture
     bool enableLogging = true;
     int rssiThresholdHigh = -50;   // Very close
     int rssiThresholdMedium = -70; // Medium distance
@@ -100,6 +110,8 @@ bool timeValid = false;
 // UI state
 int currentScreen = 0; // 0=main, 1=settings, 2=logs
 int selectedRelevanceFilter = -1; // -1=all, 0=low, 1=medium, 2=high
+int settingsSelectedItem = 0; // Currently highlighted settings item
+const int SETTINGS_ITEMS = 6;  // Number of settings items
 
 // Function prototypes
 void initDisplay();
@@ -131,11 +143,22 @@ class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
     }
 };
 
+// WiFi Promiscuous mode callback
+void onWiFiPromiscuousPacket(uint8_t* mac, int8_t rssi, uint8_t channel) {
+    // Convert MAC bytes to string format XX:XX:XX:XX:XX:XX
+    char macStr[18];
+    snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    // Check against OUI database (false = WiFi, not BLE)
+    checkOUI(String(macStr), rssi, false);
+}
+
 void setup() {
     Serial.begin(115200);
     delay(1000);
-    Serial.println("\n\nUK-OUI-SPY ESP32 v6");
-    Serial.println("====================");
+    Serial.printf("\n\nUK-OUI-SPY ESP32 v%s\n", VERSION);
+    Serial.println("==========================");
 
     // Initialize peripherals
     pinMode(BUZZER_PIN, OUTPUT);
@@ -153,7 +176,7 @@ void setup() {
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
     tft.setTextSize(2);
     tft.setCursor(20, 100);
-    tft.println("UK-OUI-SPY v6");
+    tft.printf("UK-OUI-SPY v%s", VERSION);
     tft.setTextSize(1);
     tft.setCursor(20, 130);
     tft.println("Initializing...");
@@ -214,12 +237,28 @@ void loop() {
         scanning = true;
         digitalWrite(LED_PIN, HIGH);
 
+        // BLE Scanning
         if (config.enableBLE) {
             scanBLE();
         }
 
-        // WiFi promiscuous scanning would go here
-        // (More complex - requires packet callback handling)
+        // Standard WiFi Network Scanning (beacons/APs)
+        if (config.enableWiFi) {
+            scanWiFi();
+        }
+
+        // WiFi Promiscuous Mode Scanning (probe requests, all management frames)
+        if (config.enableWiFiPromiscuous) {
+            // Calculate dwell time per channel based on scan mode
+            int dwellTime = 100;  // ms per channel
+            if (config.scanMode == SCAN_NORMAL) dwellTime = 200;
+            if (config.scanMode == SCAN_POWER_SAVE) dwellTime = 300;
+
+            // Temporarily enable promiscuous mode and scan channels
+            startWiFiPromiscuous(onWiFiPromiscuousPacket);
+            scanAllChannels(onWiFiPromiscuousPacket, dwellTime);
+            stopWiFiPromiscuous();
+        }
 
         scanning = false;
         digitalWrite(LED_PIN, LOW);
@@ -472,9 +511,14 @@ void drawMainScreen() {
         tft.print("SD");
     }
 
-    tft.setCursor(280, 8);
+    tft.setCursor(270, 8);
     tft.setTextColor(TFT_CYAN, TFT_BLACK);
     tft.printf("%d", detections.size());
+
+    // Settings gear indicator
+    tft.setCursor(300, 8);
+    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.print("[S]");
 
     // Scan mode
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
@@ -560,31 +604,172 @@ void drawDetection(Detection &det, int y, bool highlight) {
 
 void drawSettingsScreen() {
     tft.fillScreen(TFT_BLACK);
+
+    // Header
     tft.setTextSize(2);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.setCursor(70, 100);
+    tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    tft.setCursor(100, 5);
     tft.print("SETTINGS");
+
+    // Back button indicator
     tft.setTextSize(1);
-    tft.setCursor(50, 130);
-    tft.print("(Not yet implemented)");
+    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.setCursor(5, 8);
+    tft.print("< BACK");
+
+    tft.drawLine(0, 25, 320, 25, TFT_DARKGREY);
+
+    // Settings items
+    int y = 35;
+    int itemHeight = 32;
+
+    // Helper to draw a toggle switch
+    auto drawToggle = [&](int itemY, bool enabled) {
+        int toggleX = 260;
+        int toggleY = itemY + 8;
+        if (enabled) {
+            tft.fillRoundRect(toggleX, toggleY, 40, 16, 8, TFT_GREEN);
+            tft.fillCircle(toggleX + 28, toggleY + 8, 6, TFT_WHITE);
+        } else {
+            tft.fillRoundRect(toggleX, toggleY, 40, 16, 8, TFT_DARKGREY);
+            tft.fillCircle(toggleX + 12, toggleY + 8, 6, TFT_WHITE);
+        }
+    };
+
+    // Helper to draw setting row
+    auto drawSettingRow = [&](int index, const char* label, const char* value, bool isToggle, bool toggleState) {
+        int itemY = y + (index * itemHeight);
+        bool selected = (settingsSelectedItem == index);
+
+        // Background highlight
+        if (selected) {
+            tft.fillRect(0, itemY, 320, itemHeight - 2, TFT_NAVY);
+        }
+
+        // Selection indicator
+        if (selected) {
+            tft.fillRect(0, itemY, 4, itemHeight - 2, TFT_CYAN);
+        }
+
+        // Label
+        tft.setTextSize(1);
+        tft.setTextColor(TFT_WHITE, selected ? TFT_NAVY : TFT_BLACK);
+        tft.setCursor(10, itemY + 4);
+        tft.print(label);
+
+        // Value or Toggle
+        if (isToggle) {
+            drawToggle(itemY, toggleState);
+        } else {
+            tft.setTextColor(TFT_YELLOW, selected ? TFT_NAVY : TFT_BLACK);
+            tft.setCursor(10, itemY + 16);
+            tft.print(value);
+        }
+
+        // Separator
+        tft.drawLine(0, itemY + itemHeight - 2, 320, itemY + itemHeight - 2, TFT_DARKGREY);
+    };
+
+    // Draw all settings
+    const char* scanModeStr = config.scanMode == SCAN_QUICK ? "QUICK (2s)" :
+                              config.scanMode == SCAN_NORMAL ? "NORMAL (5s)" : "POWER-SAVE (15s)";
+    drawSettingRow(0, "Scan Mode", scanModeStr, false, false);
+
+    const char* alertModeStr = config.alertMode == ALERT_SILENT ? "SILENT" :
+                               config.alertMode == ALERT_BUZZER ? "BUZZER" : "VIBRATE";
+    drawSettingRow(1, "Alert Mode", alertModeStr, false, false);
+
+    drawSettingRow(2, "BLE Scanning", "", true, config.enableBLE);
+    drawSettingRow(3, "WiFi Scanning", "", true, config.enableWiFi);
+    drawSettingRow(4, "WiFi Promiscuous", "", true, config.enableWiFiPromiscuous);
+    drawSettingRow(5, "SD Card Logging", "", true, config.enableLogging);
+
+    // Footer with instructions
+    tft.drawLine(0, 230, 320, 230, TFT_DARKGREY);
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+    tft.setCursor(30, 235);
+    tft.print("Touch: UP/DOWN=Select  RIGHT=Toggle");
 }
 
 void handleTouch() {
     uint16_t x = 0, y = 0;
     bool pressed = tft.getTouch(&x, &y);
 
-    if (pressed) {
-        // Simple touch handling - cycle scan mode
+    if (!pressed) return;
+
+    // Debounce delay
+    delay(200);
+
+    if (currentScreen == 0) {
+        // Main screen touch handling
         if (y < 30) {
-            // Header area - cycle scan mode
-            config.scanMode = (ScanMode)((config.scanMode + 1) % 3);
-            switch(config.scanMode) {
-                case SCAN_QUICK: scanInterval = 2000; break;
-                case SCAN_NORMAL: scanInterval = 5000; break;
-                case SCAN_POWER_SAVE: scanInterval = 15000; break;
+            if (x > 250) {
+                // Top right - open settings
+                currentScreen = 1;
+                settingsSelectedItem = 0;
+                updateDisplay();
+            } else {
+                // Header area - cycle scan mode
+                config.scanMode = (ScanMode)((config.scanMode + 1) % 3);
+                switch(config.scanMode) {
+                    case SCAN_QUICK: scanInterval = 2000; break;
+                    case SCAN_NORMAL: scanInterval = 5000; break;
+                    case SCAN_POWER_SAVE: scanInterval = 15000; break;
+                }
+                updateDisplay();
             }
+        } else if (y > 230) {
+            // Footer area - toggle filter
+            selectedRelevanceFilter = (selectedRelevanceFilter + 1) % 4;
+            if (selectedRelevanceFilter == 3) selectedRelevanceFilter = -1;
             updateDisplay();
-            delay(300); // Debounce
+        }
+    }
+    else if (currentScreen == 1) {
+        // Settings screen touch handling
+        if (y < 25) {
+            // Back button area
+            currentScreen = 0;
+            updateDisplay();
+            return;
+        }
+
+        // Calculate which item was touched
+        int itemHeight = 32;
+        int touchedItem = (y - 35) / itemHeight;
+
+        if (touchedItem >= 0 && touchedItem < SETTINGS_ITEMS) {
+            if (x > 200) {
+                // Right side - toggle/change value
+                switch(touchedItem) {
+                    case 0: // Scan Mode
+                        config.scanMode = (ScanMode)((config.scanMode + 1) % 3);
+                        switch(config.scanMode) {
+                            case SCAN_QUICK: scanInterval = 2000; break;
+                            case SCAN_NORMAL: scanInterval = 5000; break;
+                            case SCAN_POWER_SAVE: scanInterval = 15000; break;
+                        }
+                        break;
+                    case 1: // Alert Mode
+                        config.alertMode = (AlertMode)((config.alertMode + 1) % 3);
+                        break;
+                    case 2: // BLE Scanning
+                        config.enableBLE = !config.enableBLE;
+                        break;
+                    case 3: // WiFi Scanning
+                        config.enableWiFi = !config.enableWiFi;
+                        break;
+                    case 4: // WiFi Promiscuous
+                        config.enableWiFiPromiscuous = !config.enableWiFiPromiscuous;
+                        break;
+                    case 5: // SD Card Logging
+                        config.enableLogging = !config.enableLogging;
+                        break;
+                }
+            }
+            settingsSelectedItem = touchedItem;
+            updateDisplay();
         }
     }
 }
