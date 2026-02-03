@@ -129,6 +129,10 @@ bool touchActive = false;
 const int SWIPE_THRESHOLD = 50;     // Minimum pixels for swipe
 const int LONG_PRESS_MS = 800;      // Long press threshold
 
+// Settings screen layout constants (shared between draw and touch)
+const int SETTINGS_START_Y = 28;
+const int SETTINGS_ITEM_HEIGHT = 22;
+
 // Deep sleep boot tracking
 RTC_DATA_ATTR int bootCount = 0;
 RTC_DATA_ATTR int totalDetections = 0;
@@ -764,8 +768,8 @@ void drawSettingsScreen() {
 
     tft.drawLine(0, 25, 320, 25, TFT_DARKGREY);
 
-    int y = 28;
-    int itemHeight = 22;
+    int y = SETTINGS_START_Y;
+    int itemHeight = SETTINGS_ITEM_HEIGHT;
 
     // Helper to draw toggle
     auto drawToggle = [&](int itemY, bool enabled) {
@@ -977,13 +981,14 @@ void handleTouchGestures() {
         // Swipe detection
         if (abs(deltaY) > SWIPE_THRESHOLD && abs(deltaY) > abs(deltaX)) {
             // Vertical swipe - scroll detection list
-            if (currentScreen == 0) {
+            if (currentScreen == 0 && !detections.empty()) {
                 if (deltaY > 0) {
                     // Swipe down - scroll up
                     scrollOffset = max(0, scrollOffset - 1);
                 } else {
                     // Swipe up - scroll down
-                    scrollOffset = min((int)detections.size() - 1, scrollOffset + 1);
+                    int maxOffset = max(0, (int)detections.size() - 1);
+                    scrollOffset = min(maxOffset, scrollOffset + 1);
                 }
                 updateDisplay();
                 return;
@@ -1070,8 +1075,7 @@ void handleTap(uint16_t x, uint16_t y) {
             return;
         }
 
-        int itemHeight = 26;
-        int touchedItem = (y - 35) / itemHeight;
+        int touchedItem = (y - SETTINGS_START_Y) / SETTINGS_ITEM_HEIGHT;
 
         if (touchedItem >= 0 && touchedItem < SETTINGS_ITEMS) {
             if (x > 200) {
