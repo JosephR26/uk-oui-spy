@@ -35,7 +35,7 @@ typedef struct {
 } wifi_ieee80211_packet_t;
 
 // Callback function type
-typedef void (*wifi_promiscuous_callback_t)(uint8_t* addr, int8_t rssi, uint8_t channel);
+typedef void (*wifi_promiscuous_callback_t)(const uint8_t* addr, int8_t rssi, uint8_t channel);
 
 // Function prototypes
 void initWiFiPromiscuous();

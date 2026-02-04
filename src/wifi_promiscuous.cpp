@@ -6,7 +6,7 @@ static unsigned long detected_macs[100]; // Hash cache to avoid duplicates
 static int detected_count = 0;
 
 // Simple hash function for MAC addresses
-unsigned long hashMAC(uint8_t* mac) {
+unsigned long hashMAC(const uint8_t* mac) {
     unsigned long hash = 0;
     for (int i = 0; i < 6; i++) {
         hash = hash * 256 + mac[i];
@@ -15,7 +15,7 @@ unsigned long hashMAC(uint8_t* mac) {
 }
 
 // Check if MAC was recently detected (deduplication)
-bool isRecentlyDetected(uint8_t* mac) {
+bool isRecentlyDetected(const uint8_t* mac) {
     unsigned long hash = hashMAC(mac);
     for (int i = 0; i < detected_count; i++) {
         if (detected_macs[i] == hash) {
@@ -58,7 +58,7 @@ void wifi_sniffer_packet_handler(void* buff, wifi_promiscuous_pkt_type_t type) {
 
     // We're interested in management frames that contain MAC addresses
     // Probe requests, beacons, association requests reveal device MACs
-    uint8_t* source_mac = nullptr;
+    const uint8_t* source_mac = nullptr;
 
     if (frame_type == 0) { // Management frame
         switch (frame_subtype) {
