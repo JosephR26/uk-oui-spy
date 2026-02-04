@@ -8,12 +8,15 @@
  *           threat scoring, swipe UI, OTA updates
  */
 
+#define VERSION "1.1.0"
+
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <NimBLEDevice.h>
 #include <WiFi.h>
 #include <SD.h>
 #include <SPI.h>
+#include <Wire.h>
 #include <vector>
 #include <algorithm>
 #include <HTTPClient.h>
@@ -21,6 +24,40 @@
 #include "esp_sleep.h"
 #include "oui_database.h"
 #include "wifi_promiscuous.h"
+
+// FT6236 capacitive touch controller (I2C)
+#define FT6236_ADDR 0x38
+#define FT6236_SDA  21
+#define FT6236_SCL  22
+
+// Read FT6236 touch data over I2C
+// Returns true if touched, sets x/y coordinates
+bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
+    Wire.beginTransmission(FT6236_ADDR);
+    Wire.write(0x02);  // Register: number of touch points
+    if (Wire.endTransmission() != 0) return false;
+
+    Wire.requestFrom((uint8_t)FT6236_ADDR, (uint8_t)5);
+    if (Wire.available() < 5) return false;
+
+    uint8_t numPoints = Wire.read();
+    if ((numPoints & 0x0F) == 0) return false;  // No touch
+
+    uint8_t xHigh = Wire.read();
+    uint8_t xLow  = Wire.read();
+    uint8_t yHigh = Wire.read();
+    uint8_t yLow  = Wire.read();
+
+    // FT6236 returns raw coordinates; adjust for display rotation (landscape)
+    uint16_t rawX = ((xHigh & 0x0F) << 8) | xLow;
+    uint16_t rawY = ((yHigh & 0x0F) << 8) | yLow;
+
+    // Map to landscape orientation (rotation=1): swap and invert as needed
+    *x = rawY;
+    *y = 240 - rawX;
+
+    return true;
+}
 
 // Pin definitions for ESP32-2432S028 (Two USB, Capacitive Touch version)
 #define TFT_BL 27      // Backlight control - GPIO 27 for capacitive version!
@@ -177,7 +214,7 @@ class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
 };
 
 // WiFi Promiscuous mode callback
-void onWiFiPromiscuousPacket(uint8_t* mac, int8_t rssi, uint8_t channel) {
+void onWiFiPromiscuousPacket(const uint8_t* mac, int8_t rssi, uint8_t channel) {
     // Convert MAC bytes to string format XX:XX:XX:XX:XX:XX
     char macStr[18];
     snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
@@ -197,6 +234,10 @@ void setup() {
     pinMode(BUZZER_PIN, OUTPUT);
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
+
+    // Initialize I2C for FT6236 capacitive touch
+    Wire.begin(FT6236_SDA, FT6236_SCL);
+    Serial.println("I2C touch initialized (FT6236)");
 
     // Initialize TFT backlight (CRITICAL for ESP32-2432S028!)
     pinMode(TFT_BL, OUTPUT);
@@ -338,7 +379,7 @@ void setBrightness(int level) {
 
 // Check if device is police/enforcement related
 bool isPoliceDevice(DeviceCategory cat) {
-    return (cat == CAT_BODY_CAM || cat == CAT_ANPR ||
+    return (cat == CAT_BODYCAM || cat == CAT_ANPR ||
             cat == CAT_DRONE || cat == CAT_FACIAL_RECOG);
 }
 
@@ -956,7 +997,7 @@ bool fetchOUIUpdates() {
 // Advanced touch gesture handling with swipe and long-press
 void handleTouchGestures() {
     uint16_t x = 0, y = 0;
-    bool pressed = tft.getTouch(&x, &y);
+    bool pressed = readCapacitiveTouch(&x, &y);
 
     if (pressed && !touchActive) {
         // Touch started
