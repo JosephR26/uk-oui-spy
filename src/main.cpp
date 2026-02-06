@@ -440,10 +440,11 @@ void initDisplay() {
     tft.init();
     tft.setRotation(1); // Landscape (320x240)
 
-    // Full screen clear - do twice to ensure display memory is properly initialized
-    tft.fillScreen(TFT_BLACK);
-    delay(50);
-    tft.fillScreen(TFT_BLACK);
+    // Full screen clear - multiple times to ensure display memory is properly initialized
+    for (int i = 0; i < 3; i++) {
+        tft.fillScreen(TFT_BLACK);
+        delay(100);
+    }
 
     Serial.println("Display initialized (320x240 landscape)");
 }
