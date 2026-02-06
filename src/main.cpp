@@ -244,13 +244,11 @@ void setup() {
     Wire.begin(FT6236_SDA, FT6236_SCL);
     Serial.println("I2C touch initialized (FT6236)");
 
-    // Initialize TFT backlight with PWM (CRITICAL for ESP32-2432S028!)
-    // Use LEDC channel 0 for backlight PWM control
-    ledcSetup(0, 5000, 8);      // Channel 0, 5kHz, 8-bit resolution
-    ledcAttachPin(TFT_BL, 0);   // Attach backlight pin to channel 0
-    ledcWrite(0, 255);          // Full brightness
+    // Initialize TFT backlight (CRITICAL for ESP32-2432S028!)
+    pinMode(TFT_BL, OUTPUT);
+    digitalWrite(TFT_BL, HIGH);  // Full on
     delay(100);  // Let display stabilize
-    Serial.println("Backlight enabled (full brightness)");
+    Serial.println("Backlight enabled");
 
     // Initialize display
     initDisplay();
@@ -379,10 +377,10 @@ void enterDeepSleep() {
     esp_deep_sleep_start();
 }
 
-// Set display brightness using LEDC PWM (ESP32)
+// Set display brightness (on/off for now - PWM can be added later)
 void setBrightness(int level) {
     config.brightness = constrain(level, 0, 255);
-    ledcWrite(0, config.brightness);  // Channel 0
+    digitalWrite(TFT_BL, config.brightness > 127 ? HIGH : LOW);
 }
 
 // Check if device is police/enforcement related
