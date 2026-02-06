@@ -48,13 +48,18 @@ bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
     uint8_t yHigh = Wire.read();
     uint8_t yLow  = Wire.read();
 
-    // FT6236 returns raw coordinates; adjust for display rotation (landscape)
+    // FT6236 returns raw coordinates in portrait orientation
     uint16_t rawX = ((xHigh & 0x0F) << 8) | xLow;
     uint16_t rawY = ((yHigh & 0x0F) << 8) | yLow;
 
-    // Map to landscape orientation (rotation=1): swap and invert as needed
-    *x = rawY;
-    *y = 240 - rawX;
+    // Map to landscape orientation (rotation=1) for ESP32-2432S028
+    // Touch panel is 240x320 portrait, display is 320x240 landscape
+    *x = rawX;
+    *y = rawY;
+
+    // Clamp to valid screen bounds
+    if (*x > 319) *x = 319;
+    if (*y > 239) *y = 239;
 
     return true;
 }
@@ -239,10 +244,13 @@ void setup() {
     Wire.begin(FT6236_SDA, FT6236_SCL);
     Serial.println("I2C touch initialized (FT6236)");
 
-    // Initialize TFT backlight (CRITICAL for ESP32-2432S028!)
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, HIGH);  // Turn on backlight
-    Serial.println("Backlight enabled");
+    // Initialize TFT backlight with PWM (CRITICAL for ESP32-2432S028!)
+    // Use LEDC channel 0 for backlight PWM control
+    ledcSetup(0, 5000, 8);      // Channel 0, 5kHz, 8-bit resolution
+    ledcAttachPin(TFT_BL, 0);   // Attach backlight pin to channel 0
+    ledcWrite(0, 255);          // Full brightness
+    delay(100);  // Let display stabilize
+    Serial.println("Backlight enabled (full brightness)");
 
     // Initialize display
     initDisplay();
@@ -371,10 +379,10 @@ void enterDeepSleep() {
     esp_deep_sleep_start();
 }
 
-// Set display brightness (PWM)
+// Set display brightness using LEDC PWM (ESP32)
 void setBrightness(int level) {
     config.brightness = constrain(level, 0, 255);
-    analogWrite(TFT_BL, config.brightness);
+    ledcWrite(0, config.brightness);  // Channel 0
 }
 
 // Check if device is police/enforcement related
@@ -432,9 +440,14 @@ void sortDetectionsByThreat() {
 
 void initDisplay() {
     tft.init();
-    tft.setRotation(1); // Landscape
+    tft.setRotation(1); // Landscape (320x240)
+
+    // Full screen clear - do twice to ensure display memory is properly initialized
     tft.fillScreen(TFT_BLACK);
-    Serial.println("Display initialized (240x320)");
+    delay(50);
+    tft.fillScreen(TFT_BLACK);
+
+    Serial.println("Display initialized (320x240 landscape)");
 }
 
 void initBLE() {
