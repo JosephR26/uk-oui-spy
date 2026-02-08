@@ -48,13 +48,18 @@ bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
     uint8_t yHigh = Wire.read();
     uint8_t yLow  = Wire.read();
 
-    // FT6236 returns raw coordinates; adjust for display rotation (landscape)
+    // FT6236 returns raw coordinates in portrait orientation
     uint16_t rawX = ((xHigh & 0x0F) << 8) | xLow;
     uint16_t rawY = ((yHigh & 0x0F) << 8) | yLow;
 
-    // Map to landscape orientation (rotation=1): swap and invert as needed
-    *x = rawY;
-    *y = 240 - rawX;
+    // Map to landscape orientation (rotation=1) for ESP32-2432S028
+    // Touch panel is 240x320 portrait, display is 320x240 landscape
+    *x = rawX;
+    *y = rawY;
+
+    // Clamp to valid screen bounds
+    if (*x > 319) *x = 319;
+    if (*y > 239) *y = 239;
 
     return true;
 }
@@ -241,18 +246,26 @@ void setup() {
 
     // Initialize TFT backlight (CRITICAL for ESP32-2432S028!)
     pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, HIGH);  // Turn on backlight
+    digitalWrite(TFT_BL, HIGH);  // Full on
+    delay(100);  // Let display stabilize
     Serial.println("Backlight enabled");
 
     // Initialize display
     initDisplay();
-    tft.fillScreen(TFT_BLACK);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.fillScreen(TFT_NAVY);
+    tft.setTextColor(TFT_CYAN, TFT_NAVY);
     tft.setTextSize(2);
-    tft.setCursor(20, 100);
-    tft.printf("UK-OUI-SPY v%s", VERSION);
+    tft.setCursor(50, 80);
+    tft.printf("UK-OUI-SPY");
+    tft.setTextColor(TFT_ORANGE, TFT_NAVY);
+    tft.setCursor(180, 80);
+    tft.printf("v%s", VERSION);
     tft.setTextSize(1);
-    tft.setCursor(20, 130);
+    tft.setTextColor(TFT_WHITE, TFT_NAVY);
+    tft.setCursor(60, 110);
+    tft.println("Surveillance Detector");
+    tft.setTextColor(TFT_LIGHTGREY, TFT_NAVY);
+    tft.setCursor(20, 140);
     tft.println("Initializing...");
 
     // Initialize SD card
@@ -371,10 +384,10 @@ void enterDeepSleep() {
     esp_deep_sleep_start();
 }
 
-// Set display brightness (PWM)
+// Set display brightness (on/off for now - PWM can be added later)
 void setBrightness(int level) {
     config.brightness = constrain(level, 0, 255);
-    analogWrite(TFT_BL, config.brightness);
+    digitalWrite(TFT_BL, config.brightness > 127 ? HIGH : LOW);
 }
 
 // Check if device is police/enforcement related
@@ -432,9 +445,15 @@ void sortDetectionsByThreat() {
 
 void initDisplay() {
     tft.init();
-    tft.setRotation(1); // Landscape
-    tft.fillScreen(TFT_BLACK);
-    Serial.println("Display initialized (240x320)");
+    tft.setRotation(1); // Landscape (320x240)
+
+    // Full screen clear - multiple times to ensure display memory is properly initialized
+    for (int i = 0; i < 3; i++) {
+        tft.fillScreen(TFT_BLACK);
+        delay(100);
+    }
+
+    Serial.println("Display initialized (320x240 landscape)");
 }
 
 void initBLE() {
@@ -646,11 +665,13 @@ void updateDisplay() {
 }
 
 void drawMainScreen() {
-    tft.fillScreen(TFT_BLACK);
+    // Dark blue gradient background
+    tft.fillScreen(TFT_NAVY);
+    tft.fillRect(0, 0, 320, 30, 0x000F);  // Darker header bar
 
-    // Header
+    // Header - bright cyan title
     tft.setTextSize(2);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setTextColor(TFT_CYAN, 0x000F);
     tft.setCursor(5, 5);
     tft.print("UK-OUI-SPY");
 
@@ -658,30 +679,30 @@ void drawMainScreen() {
     tft.setTextSize(1);
     tft.setCursor(200, 8);
     if (scanning) {
-        tft.setTextColor(TFT_GREEN, TFT_BLACK);
+        tft.setTextColor(TFT_GREEN, 0x000F);
         tft.print("SCAN");
     } else {
-        tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        tft.setTextColor(TFT_LIGHTGREY, 0x000F);
         tft.print("IDLE");
     }
 
     tft.setCursor(250, 8);
     if (sdCardAvailable) {
-        tft.setTextColor(TFT_GREEN, TFT_BLACK);
+        tft.setTextColor(TFT_GREEN, 0x000F);
         tft.print("SD");
     }
 
     tft.setCursor(270, 8);
-    tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    tft.setTextColor(TFT_WHITE, 0x000F);
     tft.printf("%d", detections.size());
 
     // Settings gear indicator
-    tft.setCursor(300, 8);
-    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-    tft.print("[S]");
+    tft.setCursor(295, 8);
+    tft.setTextColor(TFT_YELLOW, 0x000F);
+    tft.print("[=]");
 
     // Scan mode and filters
-    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.setTextColor(TFT_ORANGE, TFT_NAVY);
     tft.setCursor(5, 20);
     tft.printf("Mode: %s",
         config.scanMode == SCAN_QUICK ? "QUICK" :
@@ -689,20 +710,20 @@ void drawMainScreen() {
 
     // Police filter indicator
     if (config.policeOnlyFilter) {
-        tft.setTextColor(TFT_RED, TFT_BLACK);
+        tft.setTextColor(TFT_RED, TFT_NAVY);
         tft.setCursor(180, 20);
         tft.print("[POLICE]");
     }
 
     // Deep sleep indicator
     if (config.enableDeepSleep) {
-        tft.setTextColor(TFT_BLUE, TFT_BLACK);
+        tft.setTextColor(TFT_MAGENTA, TFT_NAVY);
         tft.setCursor(260, 20);
         tft.print("ZZZ");
     }
 
-    // Divider
-    tft.drawLine(0, 30, 320, 30, TFT_DARKGREY);
+    // Divider - cyan accent line
+    tft.drawLine(0, 30, 320, 30, TFT_CYAN);
 
     // Detection list
     int y = 35;
@@ -710,10 +731,11 @@ void drawMainScreen() {
 
     if (detections.empty()) {
         tft.setTextSize(2);
-        tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        tft.setTextColor(TFT_LIGHTGREY, TFT_NAVY);
         tft.setCursor(50, 100);
         tft.print("No detections");
         tft.setTextSize(1);
+        tft.setTextColor(TFT_CYAN, TFT_NAVY);
         tft.setCursor(40, 130);
         tft.print("Scanning for devices...");
     } else {
@@ -737,22 +759,23 @@ void drawMainScreen() {
     }
 
     // Footer
-    tft.drawLine(0, 230, 320, 230, TFT_DARKGREY);
+    tft.fillRect(0, 230, 320, 10, 0x000F);  // Dark footer bar
+    tft.drawLine(0, 230, 320, 230, TFT_CYAN);
     tft.setTextSize(1);
-    tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-    tft.setCursor(5, 235);
+    tft.setTextColor(TFT_CYAN, 0x000F);
+    tft.setCursor(5, 232);
     tft.printf("Next scan: %ds", (scanInterval - (millis() - lastScanTime)) / 1000);
 }
 
 void drawDetection(Detection &det, int y, bool highlight) {
-    uint16_t bgColor = highlight ? TFT_DARKGREY : TFT_BLACK;
+    uint16_t bgColor = highlight ? 0x0010 : TFT_NAVY;  // Slightly lighter when highlighted
     uint16_t relColor = getRelevanceColor(det.relevance);
     uint16_t catColor = getCategoryColor(det.category);
 
-    // Relevance bar
+    // Relevance bar (left edge)
     tft.fillRect(0, y, 5, 40, relColor);
 
-    // Manufacturer
+    // Manufacturer - bright white on dark blue
     tft.setTextSize(1);
     tft.setTextColor(TFT_WHITE, bgColor);
     tft.fillRect(5, y, 315, 10, bgColor);
@@ -788,26 +811,27 @@ void drawDetection(Detection &det, int y, bool highlight) {
     tft.setCursor(8, y + 32);
     tft.print(det.notes);
 
-    // Border
-    tft.drawLine(5, y + 40, 320, y + 40, TFT_DARKGREY);
+    // Border - subtle cyan line
+    tft.drawLine(5, y + 40, 320, y + 40, 0x0410);
 }
 
 void drawSettingsScreen() {
-    tft.fillScreen(TFT_BLACK);
+    tft.fillScreen(TFT_NAVY);
+    tft.fillRect(0, 0, 320, 25, 0x000F);  // Dark header bar
 
     // Header
     tft.setTextSize(2);
-    tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    tft.setTextColor(TFT_CYAN, 0x000F);
     tft.setCursor(100, 5);
     tft.print("SETTINGS");
 
     // Back button
     tft.setTextSize(1);
-    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.setTextColor(TFT_YELLOW, 0x000F);
     tft.setCursor(5, 8);
     tft.print("< BACK");
 
-    tft.drawLine(0, 25, 320, 25, TFT_DARKGREY);
+    tft.drawLine(0, 25, 320, 25, TFT_CYAN);
 
     int y = SETTINGS_START_Y;
     int itemHeight = SETTINGS_ITEM_HEIGHT;
@@ -820,8 +844,8 @@ void drawSettingsScreen() {
             tft.fillRoundRect(toggleX, toggleY, 36, 14, 7, TFT_GREEN);
             tft.fillCircle(toggleX + 25, toggleY + 7, 5, TFT_WHITE);
         } else {
-            tft.fillRoundRect(toggleX, toggleY, 36, 14, 7, TFT_DARKGREY);
-            tft.fillCircle(toggleX + 11, toggleY + 7, 5, TFT_WHITE);
+            tft.fillRoundRect(toggleX, toggleY, 36, 14, 7, 0x4208);  // Dark grey
+            tft.fillCircle(toggleX + 11, toggleY + 7, 5, TFT_LIGHTGREY);
         }
     };
 
@@ -829,21 +853,22 @@ void drawSettingsScreen() {
     auto drawRow = [&](int idx, const char* label, const char* val, bool isToggle, bool state) {
         int itemY = y + (idx * itemHeight);
         bool sel = (settingsSelectedItem == idx);
+        uint16_t rowBg = sel ? 0x0015 : TFT_NAVY;  // Lighter blue when selected
 
         if (sel) {
-            tft.fillRect(0, itemY, 320, itemHeight - 1, TFT_NAVY);
+            tft.fillRect(0, itemY, 320, itemHeight - 1, rowBg);
             tft.fillRect(0, itemY, 3, itemHeight - 1, TFT_CYAN);
         }
 
         tft.setTextSize(1);
-        tft.setTextColor(TFT_WHITE, sel ? TFT_NAVY : TFT_BLACK);
+        tft.setTextColor(TFT_WHITE, rowBg);
         tft.setCursor(8, itemY + 4);
         tft.print(label);
 
         if (isToggle) {
             drawToggle(itemY, state);
         } else {
-            tft.setTextColor(TFT_YELLOW, sel ? TFT_NAVY : TFT_BLACK);
+            tft.setTextColor(TFT_ORANGE, rowBg);
             tft.setCursor(160, itemY + 4);
             tft.print(val);
         }
@@ -868,81 +893,85 @@ void drawSettingsScreen() {
     // OTA Update button
     int itemY = y + (8 * itemHeight);
     bool sel = (settingsSelectedItem == 8);
+    uint16_t otaBg = sel ? 0x0015 : TFT_NAVY;
     if (sel) {
-        tft.fillRect(0, itemY, 320, itemHeight - 1, TFT_NAVY);
+        tft.fillRect(0, itemY, 320, itemHeight - 1, otaBg);
         tft.fillRect(0, itemY, 3, itemHeight - 1, TFT_CYAN);
     }
-    tft.setTextColor(TFT_ORANGE, sel ? TFT_NAVY : TFT_BLACK);
+    tft.setTextColor(TFT_ORANGE, otaBg);
     tft.setCursor(8, itemY + 4);
     tft.print("OTA Database Update...");
 
     // Footer
-    tft.drawLine(0, 230, 320, 230, TFT_DARKGREY);
+    tft.fillRect(0, 230, 320, 10, 0x000F);
+    tft.drawLine(0, 230, 320, 230, TFT_CYAN);
     tft.setTextSize(1);
-    tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-    tft.setCursor(50, 235);
+    tft.setTextColor(TFT_CYAN, 0x000F);
+    tft.setCursor(50, 232);
     tft.print("Swipe: Navigate | Tap: Toggle");
 }
 
 // OTA Update screen
 void drawOTAScreen() {
-    tft.fillScreen(TFT_BLACK);
+    tft.fillScreen(TFT_NAVY);
+    tft.fillRect(0, 0, 320, 25, 0x000F);
 
     // Header
     tft.setTextSize(2);
-    tft.setTextColor(TFT_ORANGE, TFT_BLACK);
+    tft.setTextColor(TFT_ORANGE, 0x000F);
     tft.setCursor(60, 5);
     tft.print("OTA UPDATE");
 
     tft.setTextSize(1);
-    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.setTextColor(TFT_YELLOW, 0x000F);
     tft.setCursor(5, 8);
     tft.print("< BACK");
 
-    tft.drawLine(0, 25, 320, 25, TFT_DARKGREY);
+    tft.drawLine(0, 25, 320, 25, TFT_CYAN);
 
     // Instructions
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.setTextColor(TFT_WHITE, TFT_NAVY);
     tft.setCursor(10, 40);
     tft.print("Fetches latest OUI database from GitHub.");
     tft.setCursor(10, 55);
     tft.print("Requires WiFi connection.");
 
     tft.setCursor(10, 80);
-    tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    tft.setTextColor(TFT_CYAN, TFT_NAVY);
     tft.printf("Current entries: %d", UK_OUI_DATABASE_SIZE);
 
-    // Fetch button
-    tft.fillRoundRect(80, 110, 160, 40, 8, TFT_BLUE);
+    // Fetch button - green gradient effect
+    tft.fillRoundRect(80, 110, 160, 40, 8, TFT_DARKGREEN);
+    tft.fillRoundRect(82, 112, 156, 36, 6, TFT_GREEN);
     tft.setTextSize(2);
-    tft.setTextColor(TFT_WHITE, TFT_BLUE);
-    tft.setCursor(100, 120);
+    tft.setTextColor(TFT_WHITE, TFT_GREEN);
+    tft.setCursor(95, 120);
     tft.print("FETCH NOW");
 
     // Status area
     tft.setTextSize(1);
-    tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+    tft.setTextColor(TFT_LIGHTGREY, TFT_NAVY);
     tft.setCursor(10, 170);
     tft.print("Status: Ready");
 
     tft.setCursor(10, 200);
-    tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    tft.setTextColor(TFT_CYAN, TFT_NAVY);
     tft.print("Tap button to check for updates");
 }
 
 // Fetch OUI updates from GitHub
 bool fetchOUIUpdates() {
-    tft.fillRect(10, 170, 300, 20, TFT_BLACK);
+    tft.fillRect(10, 170, 300, 20, TFT_NAVY);
     tft.setTextSize(1);
-    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.setTextColor(TFT_YELLOW, TFT_NAVY);
     tft.setCursor(10, 170);
     tft.print("Status: Connecting...");
 
     // Connect to WiFi if not connected
     if (WiFi.status() != WL_CONNECTED) {
         // Try to connect to a known network or start captive portal
-        tft.fillRect(10, 170, 300, 20, TFT_BLACK);
-        tft.setTextColor(TFT_RED, TFT_BLACK);
+        tft.fillRect(10, 170, 300, 20, TFT_NAVY);
+        tft.setTextColor(TFT_RED, TFT_NAVY);
         tft.setCursor(10, 170);
         tft.print("Status: WiFi not connected");
         tft.setCursor(10, 185);
@@ -953,7 +982,7 @@ bool fetchOUIUpdates() {
     HTTPClient http;
     http.begin("https://raw.githubusercontent.com/JosephR26/uk-oui-spy/main/data/oui_updates.json");
 
-    tft.fillRect(10, 170, 300, 20, TFT_BLACK);
+    tft.fillRect(10, 170, 300, 20, TFT_NAVY);
     tft.setTextColor(TFT_CYAN, TFT_BLACK);
     tft.setCursor(10, 170);
     tft.print("Status: Fetching...");
@@ -971,8 +1000,8 @@ bool fetchOUIUpdates() {
             int newCount = doc["count"] | 0;
             const char* version = doc["version"] | "unknown";
 
-            tft.fillRect(10, 170, 300, 50, TFT_BLACK);
-            tft.setTextColor(TFT_GREEN, TFT_BLACK);
+            tft.fillRect(10, 170, 300, 50, TFT_NAVY);
+            tft.setTextColor(TFT_GREEN, TFT_NAVY);
             tft.setCursor(10, 170);
             tft.printf("Status: Success! v%s", version);
             tft.setCursor(10, 185);
@@ -985,8 +1014,8 @@ bool fetchOUIUpdates() {
         }
     }
 
-    tft.fillRect(10, 170, 300, 20, TFT_BLACK);
-    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.fillRect(10, 170, 300, 20, TFT_NAVY);
+    tft.setTextColor(TFT_RED, TFT_NAVY);
     tft.setCursor(10, 170);
     tft.printf("Status: Failed (HTTP %d)", httpCode);
 
