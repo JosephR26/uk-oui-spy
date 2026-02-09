@@ -25,21 +25,20 @@
 #include "oui_database.h"
 #include "wifi_promiscuous.h"
 
-// FT6236/CST820 capacitive touch controller (I2C)
-// ESP32-2432S028 2-USB variant uses GPIO 33/32 for touch I2C
-#define FT6236_ADDR 0x38
-#define FT6236_SDA  33
-#define FT6236_SCL  32
-#define TOUCH_INT   21
+// CST820 capacitive touch controller (I2C)
+// ESP32-2432S028 2-USB capacitive variant: SDA=27, SCL=22
+#define TOUCH_ADDR  0x15    // CST820 uses 0x15
+#define TOUCH_SDA   27
+#define TOUCH_SCL   22
 
-// Read FT6236 touch data over I2C
+// Read CST820 touch data over I2C
 // Returns true if touched, sets x/y coordinates
 bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
-    Wire.beginTransmission(FT6236_ADDR);
+    Wire.beginTransmission(TOUCH_ADDR);
     Wire.write(0x02);  // Register: number of touch points
     if (Wire.endTransmission() != 0) return false;
 
-    Wire.requestFrom((uint8_t)FT6236_ADDR, (uint8_t)5);
+    Wire.requestFrom((uint8_t)TOUCH_ADDR, (uint8_t)5);
     if (Wire.available() < 5) return false;
 
     uint8_t numPoints = Wire.read();
@@ -50,15 +49,13 @@ bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
     uint8_t yHigh = Wire.read();
     uint8_t yLow  = Wire.read();
 
-    // FT6236 returns raw coordinates in portrait orientation (240x320)
+    // CST820 returns raw coordinates in portrait orientation (240x320)
     uint16_t rawX = ((xHigh & 0x0F) << 8) | xLow;
     uint16_t rawY = ((yHigh & 0x0F) << 8) | yLow;
 
     // Transform for landscape display (rotation=1, 320x240)
-    // Touch panel portrait -> Display landscape mapping for ESP32-2432S028 2-USB
-    // Mapping: swap axes and invert X for correct alignment
-    *x = 319 - rawY;
-    *y = rawX;
+    *x = rawY;
+    *y = 239 - rawX;
 
     // Clamp to valid screen bounds
     if (*x > 319) *x = 319;
@@ -243,9 +240,9 @@ void setup() {
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
 
-    // Initialize I2C for FT6236 capacitive touch
-    Wire.begin(FT6236_SDA, FT6236_SCL);
-    Serial.println("I2C touch initialized (FT6236)");
+    // Initialize I2C for CST820 capacitive touch (SDA=27, SCL=22)
+    Wire.begin(TOUCH_SDA, TOUCH_SCL);
+    Serial.printf("I2C touch initialized (CST820 @ 0x%02X, SDA=%d, SCL=%d)\n", TOUCH_ADDR, TOUCH_SDA, TOUCH_SCL);
 
     // Initialize TFT backlight
     // Try simple digitalWrite first - some 2-USB variants need this
