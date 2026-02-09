@@ -25,10 +25,12 @@
 #include "oui_database.h"
 #include "wifi_promiscuous.h"
 
-// FT6236 capacitive touch controller (I2C)
+// FT6236/CST820 capacitive touch controller (I2C)
+// ESP32-2432S028 2-USB variant uses GPIO 33/32 for touch I2C
 #define FT6236_ADDR 0x38
-#define FT6236_SDA  21
-#define FT6236_SCL  22
+#define FT6236_SDA  33
+#define FT6236_SCL  32
+#define TOUCH_INT   21
 
 // Read FT6236 touch data over I2C
 // Returns true if touched, sets x/y coordinates
@@ -66,7 +68,7 @@ bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
 }
 
 // Pin definitions for ESP32-2432S028 (Two USB, Capacitive Touch version)
-#define TFT_BL 27      // Backlight control - GPIO 27 for capacitive version!
+#define TFT_BL 21      // Backlight control - GPIO 21 for 2-USB variant
 #define SD_CS 5
 #define BUZZER_PIN 25  // Optional buzzer pin
 #define LED_PIN 4      // Optional LED indicator
@@ -245,14 +247,15 @@ void setup() {
     Wire.begin(FT6236_SDA, FT6236_SCL);
     Serial.println("I2C touch initialized (FT6236)");
 
-    // Initialize TFT backlight with LEDC PWM for proper brightness control
-    // ESP32 LEDC: Channel 0, 5kHz frequency, 8-bit resolution
-    // NOTE: ESP32-2432S028 2-USB variant uses ACTIVE LOW backlight (0=bright, 255=off)
-    ledcSetup(0, 5000, 8);
-    ledcAttachPin(TFT_BL, 0);
-    ledcWrite(0, 0);  // Full brightness (ACTIVE LOW: 0=on, 255=off)
-    delay(100);  // Let display stabilize
-    Serial.println("Backlight enabled (PWM channel 0, active LOW)");
+    // Initialize TFT backlight
+    // Try simple digitalWrite first - some 2-USB variants need this
+    pinMode(TFT_BL, OUTPUT);
+    digitalWrite(TFT_BL, LOW);   // Try LOW first (active LOW backlight)
+    delay(100);
+    Serial.printf("Backlight pin %d set LOW\n", TFT_BL);
+
+    // If still dark, the backlight might be always-on or on different pin
+    // The display content should still be visible
 
     // Initialize display
     initDisplay();
@@ -377,8 +380,8 @@ void enterDeepSleep() {
     totalDetections += detections.size();
     bootCount++;
 
-    // Turn off display and peripherals (ACTIVE LOW: 255 = off)
-    ledcWrite(0, 255);  // Turn off backlight via PWM (active LOW)
+    // Turn off display and peripherals
+    digitalWrite(TFT_BL, HIGH);  // Turn off backlight (active LOW: HIGH=off)
     digitalWrite(LED_PIN, LOW);
 
     // Configure wakeup timer
@@ -389,10 +392,10 @@ void enterDeepSleep() {
 }
 
 // Set display brightness using LEDC PWM (0-255)
-// Set display brightness (ACTIVE LOW: invert value for PWM)
+// Set display brightness (simple on/off for now)
 void setBrightness(int level) {
     config.brightness = constrain(level, 0, 255);
-    ledcWrite(0, 255 - config.brightness);  // Invert: 255 brightness = 0 PWM
+    digitalWrite(TFT_BL, config.brightness > 127 ? LOW : HIGH);  // Active LOW
 }
 
 // Check if device is police/enforcement related
