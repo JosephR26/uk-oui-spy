@@ -48,14 +48,16 @@ bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
     uint8_t yHigh = Wire.read();
     uint8_t yLow  = Wire.read();
 
-    // FT6236 returns raw coordinates in portrait orientation
+    // FT6236 returns raw coordinates in portrait orientation (240x320)
     uint16_t rawX = ((xHigh & 0x0F) << 8) | xLow;
     uint16_t rawY = ((yHigh & 0x0F) << 8) | yLow;
 
-    // Map to landscape orientation (rotation=1) for ESP32-2432S028
-    // Touch panel is 240x320 portrait, display is 320x240 landscape
-    *x = rawX;
-    *y = rawY;
+    // Transform for landscape display (rotation=1, 320x240)
+    // Touch panel portrait -> Display landscape mapping for ESP32-2432S028
+    // rawX (0-239 portrait width) -> screen Y (0-239)
+    // rawY (0-319 portrait height) -> screen X (0-319)
+    *x = rawY;
+    *y = 239 - rawX;
 
     // Clamp to valid screen bounds
     if (*x > 319) *x = 319;
@@ -244,11 +246,13 @@ void setup() {
     Wire.begin(FT6236_SDA, FT6236_SCL);
     Serial.println("I2C touch initialized (FT6236)");
 
-    // Initialize TFT backlight (CRITICAL for ESP32-2432S028!)
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, HIGH);  // Full on
+    // Initialize TFT backlight with LEDC PWM for proper brightness control
+    // ESP32 LEDC: Channel 0, 5kHz frequency, 8-bit resolution
+    ledcSetup(0, 5000, 8);
+    ledcAttachPin(TFT_BL, 0);
+    ledcWrite(0, 255);  // Full brightness (0-255)
     delay(100);  // Let display stabilize
-    Serial.println("Backlight enabled");
+    Serial.println("Backlight enabled (PWM channel 0)");
 
     // Initialize display
     initDisplay();
@@ -374,7 +378,7 @@ void enterDeepSleep() {
     bootCount++;
 
     // Turn off display and peripherals
-    digitalWrite(TFT_BL, LOW);
+    ledcWrite(0, 0);  // Turn off backlight via PWM
     digitalWrite(LED_PIN, LOW);
 
     // Configure wakeup timer
@@ -384,10 +388,10 @@ void enterDeepSleep() {
     esp_deep_sleep_start();
 }
 
-// Set display brightness (on/off for now - PWM can be added later)
+// Set display brightness using LEDC PWM (0-255)
 void setBrightness(int level) {
     config.brightness = constrain(level, 0, 255);
-    digitalWrite(TFT_BL, config.brightness > 127 ? HIGH : LOW);
+    ledcWrite(0, config.brightness);
 }
 
 // Check if device is police/enforcement related
