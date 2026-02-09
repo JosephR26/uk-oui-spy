@@ -48,14 +48,16 @@ bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
     uint8_t yHigh = Wire.read();
     uint8_t yLow  = Wire.read();
 
-    // FT6236 returns raw coordinates in portrait orientation
+    // FT6236 returns raw coordinates in portrait orientation (240x320)
     uint16_t rawX = ((xHigh & 0x0F) << 8) | xLow;
     uint16_t rawY = ((yHigh & 0x0F) << 8) | yLow;
 
-    // Map to landscape orientation (rotation=1) for ESP32-2432S028
-    // Touch panel is 240x320 portrait, display is 320x240 landscape
-    *x = rawX;
-    *y = rawY;
+    // Transform for landscape display (rotation=1, 320x240)
+    // Touch panel portrait -> Display landscape mapping for ESP32-2432S028
+    // rawX (0-239 portrait width) -> screen Y (0-239)
+    // rawY (0-319 portrait height) -> screen X (0-319)
+    *x = rawY;
+    *y = 239 - rawX;
 
     // Clamp to valid screen bounds
     if (*x > 319) *x = 319;
