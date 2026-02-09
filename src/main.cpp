@@ -53,11 +53,10 @@ bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
     uint16_t rawY = ((yHigh & 0x0F) << 8) | yLow;
 
     // Transform for landscape display (rotation=1, 320x240)
-    // Touch panel portrait -> Display landscape mapping for ESP32-2432S028
-    // rawX (0-239 portrait width) -> screen Y (0-239)
-    // rawY (0-319 portrait height) -> screen X (0-319)
-    *x = rawY;
-    *y = 239 - rawX;
+    // Touch panel portrait -> Display landscape mapping for ESP32-2432S028 2-USB
+    // Mapping: swap axes and invert X for correct alignment
+    *x = 319 - rawY;
+    *y = rawX;
 
     // Clamp to valid screen bounds
     if (*x > 319) *x = 319;
@@ -248,11 +247,12 @@ void setup() {
 
     // Initialize TFT backlight with LEDC PWM for proper brightness control
     // ESP32 LEDC: Channel 0, 5kHz frequency, 8-bit resolution
+    // NOTE: ESP32-2432S028 2-USB variant uses ACTIVE LOW backlight (0=bright, 255=off)
     ledcSetup(0, 5000, 8);
     ledcAttachPin(TFT_BL, 0);
-    ledcWrite(0, 255);  // Full brightness (0-255)
+    ledcWrite(0, 0);  // Full brightness (ACTIVE LOW: 0=on, 255=off)
     delay(100);  // Let display stabilize
-    Serial.println("Backlight enabled (PWM channel 0)");
+    Serial.println("Backlight enabled (PWM channel 0, active LOW)");
 
     // Initialize display
     initDisplay();
@@ -377,8 +377,8 @@ void enterDeepSleep() {
     totalDetections += detections.size();
     bootCount++;
 
-    // Turn off display and peripherals
-    ledcWrite(0, 0);  // Turn off backlight via PWM
+    // Turn off display and peripherals (ACTIVE LOW: 255 = off)
+    ledcWrite(0, 255);  // Turn off backlight via PWM (active LOW)
     digitalWrite(LED_PIN, LOW);
 
     // Configure wakeup timer
@@ -389,9 +389,10 @@ void enterDeepSleep() {
 }
 
 // Set display brightness using LEDC PWM (0-255)
+// Set display brightness (ACTIVE LOW: invert value for PWM)
 void setBrightness(int level) {
     config.brightness = constrain(level, 0, 255);
-    ledcWrite(0, config.brightness);
+    ledcWrite(0, 255 - config.brightness);  // Invert: 255 brightness = 0 PWM
 }
 
 // Check if device is police/enforcement related
