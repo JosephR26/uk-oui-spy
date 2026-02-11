@@ -2,7 +2,7 @@
 
 **Professional UK Surveillance Device Detector**
 
-![UK-OUI-SPY PRO](https://i.imgur.com/your-image-url.png)  <!-- Replace with a real image of the device -->
+![UK-OUI-SPY PRO](https://ibb.co/JWz5T5w6)
 
 UK-OUI-SPY PRO is a professional-grade, portable device designed to detect and analyze potential surveillance devices in the United Kingdom. It leverages a comprehensive database of Organizationally Unique Identifiers (OUIs) known to be used by CCTV, ANPR, drones, body cameras, and other surveillance equipment. The device is built on the ESP32 platform and features a rich touchscreen interface, an embedded web portal, and advanced intelligence capabilities.
 
