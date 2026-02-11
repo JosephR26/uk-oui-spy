@@ -1,13 +1,14 @@
 /*
- * UK-OUI-SPY ESP32 - PRO EDITION
+ * UK-OUI-SPY PRO EDITION v3.0.0
  * Professional UK Surveillance Device Detector
  *
  * Hardware: ESP32-2432S028 (2.8" ILI9341 TFT, capacitive touch)
- * Features: Multi-page UI, FreeRTOS, O(1) OUI Lookup, Secure Logging,
+ * Features: Tiered Priority Display, Correlation Detection Engine,
+ *           FreeRTOS Dual-Core, O(1) OUI Lookup, Secure Logging,
  *           Radar Visualization, Setup Wizard, Power Management.
  */
 
-#define VERSION "2.4.0-PRO"
+#define VERSION "3.0.0-PRO"
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -18,6 +19,7 @@
 #include <Wire.h>
 #include <vector>
 #include <algorithm>
+#include <map>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
@@ -26,13 +28,16 @@
 #include "wifi_promiscuous.h"
 #include "mbedtls/aes.h"
 
+// ============================================================
+// HARDWARE PIN DEFINITIONS
+// ============================================================
+
 // CST820 capacitive touch controller (I2C)
 #define TOUCH_ADDR  0x15
 #define TOUCH_SDA   27
 #define TOUCH_SCL   22
 
-// Pin definitions (TFT_BL defined in platformio.ini build_flags)
-// Derive backlight off state from TFT_BACKLIGHT_ON (set in platformio.ini)
+// Backlight polarity (derived from platformio.ini)
 #ifndef TFT_BACKLIGHT_ON
 #define TFT_BACKLIGHT_ON HIGH
 #endif
@@ -41,6 +46,7 @@
 #else
 #define TFT_BACKLIGHT_OFF HIGH
 #endif
+
 #define SD_CS 5
 #define BUZZER_PIN 25
 #define LED_PIN 4
@@ -49,21 +55,83 @@
 #define LDR_PIN 34
 #define BAT_ADC 35
 
+// ============================================================
+// PRIORITY TIER SYSTEM
+// ============================================================
+
+#define PRIORITY_CRITICAL  5   // High Value Targets (drones, govt CCTV)
+#define PRIORITY_HIGH      4   // Surveillance Infrastructure
+#define PRIORITY_MODERATE  3   // Vehicle CCTV / Bodycams
+#define PRIORITY_LOW       2   // Consumer Surveillance
+#define PRIORITY_BASELINE  1   // ISP routers, consumer CPE (filtered)
+
+// Premium colour palette (565 format)
+#define COL_BG         0x0000  // Pure black
+#define COL_CARD       0x18C3  // Dark charcoal card
+#define COL_CARD_HI    0x2945  // Slightly lighter card for high-value
+#define COL_HEADER     0x1082  // Dark header bar
+#define COL_NAVBAR     0x0841  // Dark navbar
+#define COL_ACCENT     0x07FF  // Cyan accent
+#define COL_TIER5      0xF800  // Red - Critical
+#define COL_TIER4      0xFD20  // Orange - High
+#define COL_TIER3      0xFFE0  // Yellow - Moderate
+#define COL_TIER2      0x07E0  // Green - Low
+#define COL_TIER1      0x4208  // Grey - Baseline
+#define COL_ALERT_BG   0x4000  // Dark red alert background
+#define COL_DIMTEXT    0xAD55  // Dimmed text
+
+// ============================================================
+// DATA STRUCTURES
+// ============================================================
+
 // UI Screens
 enum Screen { SCREEN_WIZARD, SCREEN_MAIN, SCREEN_RADAR, SCREEN_SETTINGS, SCREEN_INFO };
 Screen currentScreen = SCREEN_WIZARD;
 
-// Scan modes
 enum ScanMode { SCAN_QUICK = 0, SCAN_NORMAL = 1, SCAN_POWER_SAVE = 2 };
 enum AlertMode { ALERT_SILENT = 0, ALERT_BUZZER = 1, ALERT_VIBRATE = 2 };
 
+// Priority entry loaded from priority.json
+struct PriorityEntry {
+    String oui;
+    String label;
+    String context;
+    String correlationGroup;
+    int priority;
+    float confidence;
+};
+
+// Correlation rule loaded from priority.json
+struct CorrelationRule {
+    String id;
+    String name;
+    String description;
+    std::vector<String> requiredGroups;
+    int minDevices;
+    String alertLevel;
+};
+
+// Active correlation alert
+struct CorrelationAlert {
+    String name;
+    String description;
+    String alertLevel;
+    unsigned long timestamp;
+};
+
+// Enhanced detection with priority
 struct Detection {
     String macAddress;
     String manufacturer;
+    String context;
+    String correlationGroup;
     DeviceCategory category;
     RelevanceLevel relevance;
+    int priority;
     int8_t rssi;
     unsigned long timestamp;
+    unsigned long firstSeen;
+    int sightings;
     bool isBLE;
 };
 
@@ -74,20 +142,30 @@ struct Config {
     bool enableWiFi = true;
     bool enableLogging = true;
     bool secureLogging = false;
+    bool showBaseline = false;  // Filter baseline by default
     int brightness = 255;
     bool autoBrightness = true;
     char encryptionKey[17] = "UK-OUI-SPY-2026";
     bool setupComplete = false;
-    int sleepTimeout = 300; // 5 minutes
+    int sleepTimeout = 300;
 };
 
-// Global objects
+// ============================================================
+// GLOBALS
+// ============================================================
+
 TFT_eSPI tft = TFT_eSPI();
 Config config;
 Preferences preferences;
 std::vector<Detection> detections;
+std::vector<PriorityEntry> priorityDB;
+std::vector<CorrelationRule> correlationRules;
+std::vector<CorrelationAlert> activeAlerts;
+std::map<String, PriorityEntry*> priorityLookup;  // OUI -> PriorityEntry
 SemaphoreHandle_t xDetectionMutex;
+
 const int MAX_DETECTIONS = 50;
+const int MAX_ALERTS = 5;
 unsigned long lastScanTime = 0;
 unsigned long lastInteractionTime = 0;
 int scanInterval = 5000;
@@ -96,8 +174,13 @@ bool sdCardAvailable = false;
 float batteryVoltage = 0.0;
 bool i2cAvailable = false;
 int wizardStep = 0;
+int scrollOffset = 0;
+int maxScroll = 0;
 
-// Function prototypes
+// ============================================================
+// FUNCTION PROTOTYPES
+// ============================================================
+
 void initDisplay();
 void initBLE();
 void initWiFi();
@@ -122,25 +205,294 @@ float readBattery();
 void saveConfig();
 void loadConfig();
 void enterDeepSleep();
+bool loadPriorityDB(const char* path);
+void runCorrelationEngine();
+void drawCorrelationBanner();
+void alertBuzzer(int priority);
+void alertLED(int priority);
+uint16_t getTierColor(int priority);
+const char* getTierLabel(int priority);
+int getTierStars(int priority);
 
-// BLE Scan callback
+// ============================================================
+// PRIORITY DATABASE LOADER
+// ============================================================
+
+bool loadPriorityDB(const char* path) {
+    if (!SD.exists(path)) return false;
+    File file = SD.open(path);
+    if (!file) return false;
+
+    // Allocate JSON document (adjust size for your DB)
+    DynamicJsonDocument doc(16384);
+    DeserializationError error = deserializeJson(doc, file);
+    file.close();
+
+    if (error) {
+        Serial.printf("Priority JSON parse error: %s\n", error.c_str());
+        return false;
+    }
+
+    priorityDB.clear();
+    priorityLookup.clear();
+
+    // Load entries
+    JsonArray entries = doc["entries"];
+    for (JsonObject entry : entries) {
+        PriorityEntry pe;
+        pe.oui = entry["oui"].as<String>();
+        pe.label = entry["label"].as<String>();
+        pe.context = entry["context"].as<String>();
+        pe.correlationGroup = entry["correlation_group"].as<String>();
+        pe.priority = entry["priority"].as<int>();
+        pe.confidence = entry["confidence"].as<float>();
+        priorityDB.push_back(pe);
+    }
+
+    // Build lookup table
+    for (auto& pe : priorityDB) {
+        priorityLookup[pe.oui] = &pe;
+    }
+
+    // Load correlation rules
+    correlationRules.clear();
+    JsonArray rules = doc["correlation_rules"];
+    for (JsonObject rule : rules) {
+        CorrelationRule cr;
+        cr.id = rule["id"].as<String>();
+        cr.name = rule["name"].as<String>();
+        cr.description = rule["description"].as<String>();
+        cr.minDevices = rule["min_devices"].as<int>();
+        cr.alertLevel = rule["alert_level"].as<String>();
+        JsonArray groups = rule["required_groups"];
+        for (const char* g : groups) {
+            cr.requiredGroups.push_back(String(g));
+        }
+        correlationRules.push_back(cr);
+    }
+
+    Serial.printf("Priority DB: %d entries, %d rules loaded\n", priorityDB.size(), correlationRules.size());
+    return true;
+}
+
+// Fallback priority entries if no SD card
+void initializeStaticPriorityDB() {
+    priorityDB.clear();
+    priorityLookup.clear();
+
+    // Field-validated high-value targets
+    priorityDB.push_back({"00:60:37", "Skydio Controller", "Autonomous drone ops", "skydio_ops", 5, 0.98});
+    priorityDB.push_back({"90:9F:33", "Sky Drone", "Autonomous drone ops", "skydio_ops", 5, 0.95});
+    priorityDB.push_back({"60:60:1F", "DJI", "Commercial/police drone", "dji_ops", 5, 0.97});
+    priorityDB.push_back({"B8:69:F4", "Ubiquiti Networks", "UniFi cameras/APs", "ubiquiti_infra", 4, 0.88});
+    priorityDB.push_back({"00:12:12", "Hikvision", "Govt/council CCTV", "hikvision_net", 5, 0.99});
+    priorityDB.push_back({"00:40:8C", "Axis Communications", "Professional IP cameras", "axis_net", 5, 0.99});
+    priorityDB.push_back({"A4:DA:32", "Dahua Technology", "Govt/council CCTV", "dahua_net", 5, 0.99});
+    priorityDB.push_back({"3C:EF:8C", "Dahua Technology", "IP cameras and NVRs", "dahua_net", 5, 0.97});
+    priorityDB.push_back({"E0:50:8B", "Genetec", "Facial recognition", "genetec_net", 5, 0.96});
+    priorityDB.push_back({"00:18:7D", "Pelco (Motorola)", "Police/transport CCTV", "pelco_net", 5, 0.95});
+    priorityDB.push_back({"D8:60:CF", "Smart Dashcam", "Delivery/bodycam", "vehicle_cam", 3, 0.90});
+    priorityDB.push_back({"74:83:C2", "GoPro", "Action cams/bodycam", "gopro_cam", 3, 0.92});
+    priorityDB.push_back({"18:B4:30", "Nest (Google)", "Consumer doorbell cam", "nest_home", 2, 0.85});
+    priorityDB.push_back({"EC:71:DB", "Ring (Amazon)", "Consumer doorbell cam", "ring_home", 2, 0.85});
+    priorityDB.push_back({"74:DA:88", "Sky CPE", "Consumer broadband", "consumer_isp", 1, 0.99});
+    priorityDB.push_back({"FC:F8:AE", "BT/EE Hub", "Consumer broadband", "consumer_isp", 1, 0.99});
+    priorityDB.push_back({"20:8B:FB", "TP-Link", "Consumer networking", "consumer_isp", 1, 0.99});
+
+    for (auto& pe : priorityDB) {
+        priorityLookup[pe.oui] = &pe;
+    }
+
+    // Static correlation rules
+    correlationRules.clear();
+    CorrelationRule skydio;
+    skydio.id = "skydio_active_ops";
+    skydio.name = "SKYDIO OPS ACTIVE";
+    skydio.description = "Skydio controller + drone both detected";
+    skydio.requiredGroups.push_back("skydio_ops");
+    skydio.minDevices = 2;
+    skydio.alertLevel = "CRITICAL";
+    correlationRules.push_back(skydio);
+
+    CorrelationRule dji;
+    dji.id = "dji_active_ops";
+    dji.name = "DJI DRONE OPS";
+    dji.description = "DJI drone platform detected";
+    dji.requiredGroups.push_back("dji_ops");
+    dji.minDevices = 1;
+    dji.alertLevel = "HIGH";
+    correlationRules.push_back(dji);
+
+    CorrelationRule cluster;
+    cluster.id = "surveillance_cluster";
+    cluster.name = "SURVEILLANCE CLUSTER";
+    cluster.description = "Multiple surveillance devices - monitored zone";
+    cluster.requiredGroups.push_back("hikvision_net");
+    cluster.requiredGroups.push_back("axis_net");
+    cluster.requiredGroups.push_back("dahua_net");
+    cluster.requiredGroups.push_back("pelco_net");
+    cluster.requiredGroups.push_back("ubiquiti_infra");
+    cluster.minDevices = 3;
+    cluster.alertLevel = "HIGH";
+    correlationRules.push_back(cluster);
+
+    CorrelationRule faceRecog;
+    faceRecog.id = "facial_recognition_zone";
+    faceRecog.name = "FACE RECOG ZONE";
+    faceRecog.description = "Facial recognition infrastructure detected";
+    faceRecog.requiredGroups.push_back("genetec_net");
+    faceRecog.minDevices = 1;
+    faceRecog.alertLevel = "CRITICAL";
+    correlationRules.push_back(faceRecog);
+}
+
+// ============================================================
+// CORRELATION ENGINE
+// ============================================================
+
+void runCorrelationEngine() {
+    // Count devices per correlation group
+    std::map<String, int> groupCounts;
+    xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
+    for (auto& det : detections) {
+        if (!det.correlationGroup.isEmpty()) {
+            groupCounts[det.correlationGroup]++;
+        }
+    }
+    xSemaphoreGive(xDetectionMutex);
+
+    // Evaluate each rule
+    activeAlerts.clear();
+    for (auto& rule : correlationRules) {
+        int matchingDevices = 0;
+        for (auto& group : rule.requiredGroups) {
+            auto it = groupCounts.find(group);
+            if (it != groupCounts.end()) {
+                matchingDevices += it->second;
+            }
+        }
+        if (matchingDevices >= rule.minDevices) {
+            CorrelationAlert alert;
+            alert.name = rule.name;
+            alert.description = rule.description;
+            alert.alertLevel = rule.alertLevel;
+            alert.timestamp = millis();
+            activeAlerts.push_back(alert);
+
+            // Trigger hardware alerts for critical correlations
+            if (rule.alertLevel == "CRITICAL") {
+                alertBuzzer(5);
+                alertLED(5);
+            } else if (rule.alertLevel == "HIGH") {
+                alertBuzzer(4);
+                alertLED(4);
+            }
+        }
+    }
+}
+
+// ============================================================
+// ALERT SYSTEM
+// ============================================================
+
+void alertBuzzer(int priority) {
+    if (config.alertMode == ALERT_SILENT) return;
+    if (priority >= PRIORITY_CRITICAL) {
+        // Triple rapid beep for critical
+        for (int i = 0; i < 3; i++) {
+            tone(BUZZER_PIN, 2800, 80);
+            delay(120);
+        }
+    } else if (priority >= PRIORITY_HIGH) {
+        // Double beep for high
+        for (int i = 0; i < 2; i++) {
+            tone(BUZZER_PIN, 2200, 100);
+            delay(150);
+        }
+    } else if (priority >= PRIORITY_MODERATE) {
+        // Single short beep for moderate
+        tone(BUZZER_PIN, 1600, 80);
+    }
+    // No buzzer for LOW or BASELINE
+}
+
+void alertLED(int priority) {
+    if (priority >= PRIORITY_CRITICAL) {
+        // Fast red blink
+        for (int i = 0; i < 5; i++) {
+            digitalWrite(LED_PIN, HIGH);
+            delay(50);
+            digitalWrite(LED_PIN, LOW);
+            delay(50);
+        }
+    } else if (priority >= PRIORITY_HIGH) {
+        // Red pulse
+        digitalWrite(LED_PIN, HIGH);
+        delay(200);
+        digitalWrite(LED_PIN, LOW);
+    } else if (priority >= PRIORITY_MODERATE) {
+        // Brief green flash
+        digitalWrite(LED_G_PIN, HIGH);
+        delay(100);
+        digitalWrite(LED_G_PIN, LOW);
+    }
+}
+
+// ============================================================
+// TIER DISPLAY HELPERS
+// ============================================================
+
+uint16_t getTierColor(int priority) {
+    switch (priority) {
+        case 5: return COL_TIER5;
+        case 4: return COL_TIER4;
+        case 3: return COL_TIER3;
+        case 2: return COL_TIER2;
+        default: return COL_TIER1;
+    }
+}
+
+const char* getTierLabel(int priority) {
+    switch (priority) {
+        case 5: return "HIGH VALUE TARGET";
+        case 4: return "SURVEILLANCE INFRA";
+        case 3: return "VEHICLE CCTV";
+        case 2: return "CONSUMER SURVEIL";
+        default: return "BASELINE";
+    }
+}
+
+int getTierStars(int priority) {
+    return constrain(priority, 1, 5);
+}
+
+// ============================================================
+// BLE SCAN CALLBACK
+// ============================================================
+
 class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
     void onResult(NimBLEAdvertisedDevice* advertisedDevice) {
         checkOUI(advertisedDevice->getAddress().toString().c_str(), advertisedDevice->getRSSI(), true);
     }
 };
 
-// FreeRTOS Tasks
+// ============================================================
+// FREERTOS TASKS
+// ============================================================
+
 void ScanTask(void *pvParameters) {
     for (;;) {
-        if (config.setupComplete && millis() - lastScanTime >= scanInterval) {
+        if (config.setupComplete && millis() - lastScanTime >= (unsigned long)scanInterval) {
             scanning = true;
-            digitalWrite(LED_PIN, HIGH);
+            digitalWrite(LED_G_PIN, HIGH);  // Green = scanning
             if (config.enableBLE) scanBLE();
             if (config.enableWiFi) scanWiFi();
             scanning = false;
-            digitalWrite(LED_PIN, LOW);
+            digitalWrite(LED_G_PIN, LOW);
             lastScanTime = millis();
+
+            // Run correlation engine after each scan cycle
+            runCorrelationEngine();
         }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
@@ -159,15 +511,18 @@ void UITask(void *pvParameters) {
         }
         batteryVoltage = readBattery();
         updateDisplay();
-        
-        // Power Management
-        if (millis() - lastInteractionTime > (config.sleepTimeout * 1000)) {
+
+        if (millis() - lastInteractionTime > (unsigned long)(config.sleepTimeout * 1000)) {
             enterDeepSleep();
         }
-        
+
         vTaskDelay(pdMS_TO_TICKS(30));
     }
 }
+
+// ============================================================
+// TOUCH DRIVER (CST820)
+// ============================================================
 
 bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
     if (!i2cAvailable) return false;
@@ -181,43 +536,62 @@ bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
     uint8_t yH = Wire.read(); uint8_t yL = Wire.read();
     uint16_t rawX = ((xH & 0x0F) << 8) | xL;
     uint16_t rawY = ((yH & 0x0F) << 8) | yL;
-    *x = rawY; *y = 239 - rawX;
+    // Landscape rotation mapping
+    *x = rawY;
+    *y = 239 - rawX;
     lastInteractionTime = millis();
     return true;
 }
 
+// ============================================================
+// SETUP & LOOP
+// ============================================================
+
 void setup() {
     Serial.begin(115200);
+    Serial.println("UK-OUI-SPY PRO v" VERSION " starting...");
     xDetectionMutex = xSemaphoreCreateMutex();
+
+    // Pin setup
     pinMode(LED_PIN, OUTPUT);
     pinMode(LED_G_PIN, OUTPUT);
     pinMode(LED_B_PIN, OUTPUT);
     pinMode(TFT_BL, OUTPUT);
     pinMode(BAT_ADC, INPUT);
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
-    
+
+    // Touch controller
     Wire.begin(TOUCH_SDA, TOUCH_SCL);
     Wire.beginTransmission(TOUCH_ADDR);
     if (Wire.endTransmission() == 0) i2cAvailable = true;
-    
+
     initDisplay();
     loadConfig();
-    if (!config.setupComplete) currentScreen = SCREEN_WIZARD;
-    else currentScreen = SCREEN_MAIN;
-    
+    currentScreen = config.setupComplete ? SCREEN_MAIN : SCREEN_WIZARD;
+
     initSDCard();
+
+    // Load OUI database (SD first, then static fallback)
     if (!loadOUIDatabaseFromSD("/oui.csv")) initializeStaticDatabase();
+
+    // Load priority database (SD first, then static fallback)
+    if (!loadPriorityDB("/priority.json")) initializeStaticPriorityDB();
+
     initBLE();
     initWiFi();
-    
+
     lastInteractionTime = millis();
     xTaskCreatePinnedToCore(ScanTask, "ScanTask", 8192, NULL, 1, NULL, 0);
-    xTaskCreatePinnedToCore(UITask, "UITask", 8192, NULL, 1, NULL, 1);
+    xTaskCreatePinnedToCore(UITask, "UITask", 12288, NULL, 1, NULL, 1);
 }
 
 void loop() { vTaskDelay(pdMS_TO_TICKS(1000)); }
 
-void initDisplay() { tft.init(); tft.setRotation(1); tft.fillScreen(TFT_BLACK); }
+// ============================================================
+// PERIPHERAL INIT
+// ============================================================
+
+void initDisplay() { tft.init(); tft.setRotation(1); tft.fillScreen(COL_BG); }
 void initSDCard() { sdCardAvailable = SD.begin(SD_CS); }
 void initBLE() { NimBLEDevice::init("UK-OUI-SPY"); }
 void initWiFi() { WiFi.mode(WIFI_STA); WiFi.disconnect(); }
@@ -233,27 +607,59 @@ void scanWiFi() {
     for (int i = 0; i < n; ++i) checkOUI(WiFi.BSSIDstr(i), WiFi.RSSI(i), false);
 }
 
+// ============================================================
+// OUI CHECK WITH PRIORITY ENRICHMENT
+// ============================================================
+
 void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
-    String mac = macAddress; mac.toUpperCase();
+    String mac = macAddress;
+    mac.toUpperCase();
     String oui = mac.substring(0, 8);
-    auto it = ouiLookup.find(oui);
-    if (it != ouiLookup.end()) {
-        Detection det;
-        det.macAddress = mac;
-        det.manufacturer = it->second->manufacturer;
-        det.category = it->second->category;
-        det.relevance = it->second->relevance;
-        det.rssi = rssi;
-        det.timestamp = millis();
-        addDetection(det);
-        
-        if (config.enableLogging && sdCardAvailable) {
-            String logData = mac + "," + String(rssi) + "," + det.manufacturer;
-            if (config.secureLogging) encryptAndLog(logData);
-            else {
-                File f = SD.open("/detections.csv", FILE_APPEND);
-                if (f) { f.println(logData); f.close(); }
-            }
+
+    // Check OUI database first
+    auto ouiIt = ouiLookup.find(oui);
+    if (ouiIt == ouiLookup.end()) return;  // Not a known surveillance OUI
+
+    // Build detection
+    Detection det;
+    det.macAddress = mac;
+    det.manufacturer = ouiIt->second->manufacturer;
+    det.category = ouiIt->second->category;
+    det.relevance = ouiIt->second->relevance;
+    det.rssi = rssi;
+    det.timestamp = millis();
+    det.firstSeen = millis();
+    det.sightings = 1;
+    det.isBLE = isBLE;
+    det.priority = (det.relevance == REL_HIGH) ? 4 : (det.relevance == REL_MEDIUM) ? 3 : 2;
+    det.context = "";
+    det.correlationGroup = "";
+
+    // Enrich with priority database
+    auto priIt = priorityLookup.find(oui);
+    if (priIt != priorityLookup.end()) {
+        det.manufacturer = priIt->second->label;
+        det.context = priIt->second->context;
+        det.correlationGroup = priIt->second->correlationGroup;
+        det.priority = priIt->second->priority;
+    }
+
+    addDetection(det);
+
+    // Alert based on priority
+    if (det.priority >= PRIORITY_MODERATE) {
+        alertBuzzer(det.priority);
+        alertLED(det.priority);
+    }
+
+    // Log
+    if (config.enableLogging && sdCardAvailable) {
+        String logData = mac + "," + String(rssi) + "," + det.manufacturer +
+                         "," + String(det.priority) + "," + det.context;
+        if (config.secureLogging) encryptAndLog(logData);
+        else {
+            File f = SD.open("/detections.csv", FILE_APPEND);
+            if (f) { f.println(logData); f.close(); }
         }
     }
 }
@@ -263,15 +669,28 @@ void addDetection(Detection det) {
     bool found = false;
     for (auto &d : detections) {
         if (d.macAddress == det.macAddress) {
-            d.rssi = det.rssi; d.timestamp = millis(); found = true; break;
+            d.rssi = det.rssi;
+            d.timestamp = millis();
+            d.sightings++;
+            found = true;
+            break;
         }
     }
     if (!found) {
         detections.insert(detections.begin(), det);
-        if (detections.size() > MAX_DETECTIONS) detections.pop_back();
+        if ((int)detections.size() > MAX_DETECTIONS) detections.pop_back();
     }
+    // Sort by priority (highest first), then by RSSI (strongest first)
+    std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b) {
+        if (a.priority != b.priority) return a.priority > b.priority;
+        return a.rssi > b.rssi;
+    });
     xSemaphoreGive(xDetectionMutex);
 }
+
+// ============================================================
+// DISPLAY SYSTEM
+// ============================================================
 
 void updateDisplay() {
     switch (currentScreen) {
@@ -284,156 +703,425 @@ void updateDisplay() {
 }
 
 void drawHeader(const char* title) {
-    tft.fillRect(0, 0, 320, 30, 0x1082);
+    tft.fillRect(0, 0, 320, 28, COL_HEADER);
     tft.setTextColor(TFT_WHITE);
     tft.setTextSize(2);
-    tft.setCursor(10, 7);
+    tft.setCursor(10, 6);
     tft.print(title);
-    if (scanning) tft.fillCircle(250, 15, 4, TFT_CYAN);
-    tft.drawRect(280, 8, 25, 12, TFT_WHITE);
-    tft.fillRect(305, 11, 2, 6, TFT_WHITE);
-    int batWidth = map(constrain(batteryVoltage * 100, 330, 420), 330, 420, 0, 21);
-    tft.fillRect(282, 10, batWidth, 8, batteryVoltage < 3.5 ? TFT_RED : TFT_GREEN);
+
+    // Scanning indicator
+    if (scanning) {
+        tft.fillCircle(240, 14, 4, COL_ACCENT);
+        tft.setTextSize(1);
+        tft.setCursor(248, 10);
+        tft.setTextColor(COL_ACCENT);
+        tft.print("SCAN");
+    }
+
+    // Battery icon
+    tft.drawRect(285, 7, 25, 12, TFT_WHITE);
+    tft.fillRect(310, 10, 2, 6, TFT_WHITE);
+    int batPct = constrain(map((int)(batteryVoltage * 100), 330, 420, 0, 100), 0, 100);
+    int batWidth = map(batPct, 0, 100, 0, 21);
+    uint16_t batColor = batPct < 20 ? TFT_RED : (batPct < 50 ? TFT_YELLOW : TFT_GREEN);
+    tft.fillRect(287, 9, batWidth, 8, batColor);
 }
 
 void drawNavbar() {
-    tft.fillRect(0, 210, 320, 30, 0x0841);
+    tft.fillRect(0, 210, 320, 30, COL_NAVBAR);
     tft.drawFastHLine(0, 210, 320, 0x2104);
     tft.setTextSize(1);
     const char* labels[] = {"LIST", "RADAR", "CONFIG", "INFO"};
     for (int i = 0; i < 4; i++) {
-        tft.setTextColor(currentScreen == i + 1 ? TFT_CYAN : 0x7BEF);
+        bool active = (currentScreen == (Screen)(i + 1));
+        if (active) {
+            tft.fillRoundRect(5 + (i * 80), 212, 70, 24, 3, 0x1082);
+        }
+        tft.setTextColor(active ? COL_ACCENT : 0x7BEF);
         tft.setCursor(20 + (i * 80), 220);
         tft.print(labels[i]);
     }
 }
 
+// ============================================================
+// TIERED MAIN SCREEN
+// ============================================================
+
+void drawMainScreen() {
+    tft.startWrite();
+    tft.fillScreen(COL_BG);
+    drawHeader("SURVEILLANCE LIST");
+
+    // Correlation alert banner (if active)
+    int yStart = 30;
+    if (!activeAlerts.empty()) {
+        drawCorrelationBanner();
+        yStart = 52;
+    }
+
+    // Take snapshot
+    xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
+    auto snapshot = detections;
+    xSemaphoreGive(xDetectionMutex);
+
+    // Filter baseline if setting is off
+    if (!config.showBaseline) {
+        snapshot.erase(
+            std::remove_if(snapshot.begin(), snapshot.end(),
+                [](const Detection& d) { return d.priority <= PRIORITY_BASELINE; }),
+            snapshot.end()
+        );
+    }
+
+    // Calculate scroll limits
+    maxScroll = max(0, (int)snapshot.size() - 4);
+    scrollOffset = constrain(scrollOffset, 0, maxScroll);
+
+    // Draw tier headers and items
+    int y = yStart;
+    int currentTier = -1;
+    int itemIndex = 0;
+
+    for (int i = scrollOffset; i < (int)snapshot.size() && y < 200; i++) {
+        auto& det = snapshot[i];
+
+        // Draw tier separator when tier changes
+        if (det.priority != currentTier) {
+            currentTier = det.priority;
+            uint16_t tierCol = getTierColor(currentTier);
+
+            // Tier header bar
+            tft.fillRect(0, y, 320, 14, 0x0000);
+            tft.fillRect(2, y + 1, 3, 12, tierCol);
+            tft.setTextSize(1);
+            tft.setTextColor(tierCol);
+            tft.setCursor(10, y + 3);
+
+            // Stars
+            for (int s = 0; s < getTierStars(currentTier); s++) {
+                tft.print("*");
+            }
+            tft.printf(" %s", getTierLabel(currentTier));
+            y += 16;
+            if (y >= 200) break;
+        }
+
+        // Draw detection card
+        uint16_t cardBg = (det.priority >= PRIORITY_CRITICAL) ? COL_CARD_HI : COL_CARD;
+        tft.fillRoundRect(5, y, 310, 30, 3, cardBg);
+
+        // Priority colour bar on left edge
+        tft.fillRect(5, y, 4, 30, getTierColor(det.priority));
+
+        // Protocol badge
+        uint16_t badgeCol = det.isBLE ? 0x001F : 0x07E0;  // Blue for BLE, Green for WiFi
+        tft.fillRoundRect(270, y + 3, 40, 12, 2, badgeCol);
+        tft.setTextSize(1);
+        tft.setTextColor(TFT_WHITE);
+        tft.setCursor(275, y + 5);
+        tft.print(det.isBLE ? "BLE" : "WiFi");
+
+        // Manufacturer name
+        tft.setTextSize(1);
+        tft.setTextColor(TFT_WHITE);
+        tft.setCursor(14, y + 4);
+        String displayName = det.manufacturer;
+        if (displayName.length() > 28) displayName = displayName.substring(0, 25) + "...";
+        tft.print(displayName);
+
+        // Second line: MAC + RSSI + sightings
+        tft.setTextColor(COL_DIMTEXT);
+        tft.setCursor(14, y + 17);
+        tft.printf("%s  %ddBm", det.macAddress.substring(0, 8).c_str(), det.rssi);
+        if (det.sightings > 1) {
+            tft.printf("  x%d", det.sightings);
+        }
+
+        y += 33;
+        itemIndex++;
+    }
+
+    // Scroll indicator
+    if (maxScroll > 0) {
+        int barHeight = max(10, 170 / max(1, (int)snapshot.size()));
+        int barY = map(scrollOffset, 0, maxScroll, yStart, 200 - barHeight);
+        tft.fillRoundRect(316, barY, 3, barHeight, 1, COL_ACCENT);
+    }
+
+    // Empty state
+    if (snapshot.empty()) {
+        tft.setTextSize(1);
+        tft.setTextColor(COL_DIMTEXT);
+        tft.setCursor(80, 110);
+        tft.print("Scanning for devices...");
+    }
+
+    drawNavbar();
+    tft.endWrite();
+}
+
+// ============================================================
+// CORRELATION ALERT BANNER
+// ============================================================
+
+void drawCorrelationBanner() {
+    if (activeAlerts.empty()) return;
+
+    auto& alert = activeAlerts[0];  // Show most recent
+    uint16_t bgCol = (alert.alertLevel == "CRITICAL") ? COL_ALERT_BG : 0x4200;
+
+    tft.fillRect(0, 29, 320, 22, bgCol);
+
+    // Flashing indicator
+    bool blink = (millis() / 300) % 2;
+    if (blink) {
+        tft.fillCircle(12, 40, 4, COL_TIER5);
+    }
+
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_WHITE);
+    tft.setCursor(22, 33);
+    tft.printf("[%s]", alert.alertLevel.c_str());
+    tft.setTextColor(COL_TIER5);
+    tft.setCursor(22, 43);
+    tft.print(alert.name);
+}
+
+// ============================================================
+// RADAR SCREEN (Premium Radar-Style Map)
+// ============================================================
+
+void drawRadarScreen() {
+    tft.startWrite();
+    tft.fillScreen(COL_BG);
+    drawHeader("PROXIMITY RADAR");
+
+    int cx = 160, cy = 118, r = 80;
+
+    // Radar rings with distance labels
+    for (int ring = 1; ring <= 3; ring++) {
+        int rr = (r * ring) / 3;
+        tft.drawCircle(cx, cy, rr, 0x1082);
+    }
+    // Crosshairs
+    tft.drawLine(cx - r, cy, cx + r, cy, 0x1082);
+    tft.drawLine(cx, cy - r, cx, cy + r, 0x1082);
+
+    // Distance labels
+    tft.setTextSize(1);
+    tft.setTextColor(0x4208);
+    tft.setCursor(cx + r/3 + 2, cy + 2); tft.print("10m");
+    tft.setCursor(cx + 2*r/3 + 2, cy + 2); tft.print("30m");
+    tft.setCursor(cx + r + 2, cy + 2); tft.print("50m+");
+
+    // Centre dot (you)
+    tft.fillCircle(cx, cy, 3, COL_ACCENT);
+
+    // Plot detections
+    xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
+    auto snapshot = detections;
+    xSemaphoreGive(xDetectionMutex);
+
+    for (auto& det : snapshot) {
+        if (!config.showBaseline && det.priority <= PRIORITY_BASELINE) continue;
+
+        // Distance from RSSI
+        float dist = map(constrain(det.rssi, -100, -30), -100, -30, r, 5);
+
+        // Deterministic angle from MAC hash
+        unsigned long hash = 0;
+        for (char c : det.macAddress) hash = hash * 31 + c;
+        float angle = (float)(hash % 360) * PI / 180.0;
+
+        int px = cx + (int)(dist * cos(angle));
+        int py = cy + (int)(dist * sin(angle));
+
+        // Draw device dot sized by priority
+        int dotSize = (det.priority >= 4) ? 5 : 3;
+        tft.fillCircle(px, py, dotSize, getTierColor(det.priority));
+
+        // Label for high-value targets
+        if (det.priority >= PRIORITY_HIGH) {
+            tft.setTextSize(1);
+            tft.setTextColor(getTierColor(det.priority));
+            String shortName = det.manufacturer.substring(0, 8);
+            tft.setCursor(px + dotSize + 2, py - 3);
+            tft.print(shortName);
+        }
+    }
+
+    // Correlation alert overlay on radar
+    if (!activeAlerts.empty()) {
+        tft.setTextSize(1);
+        tft.setTextColor(COL_TIER5);
+        tft.setCursor(5, 200);
+        tft.printf("ALERT: %s", activeAlerts[0].name.c_str());
+    }
+
+    drawNavbar();
+    tft.endWrite();
+}
+
+// ============================================================
+// SETTINGS SCREEN
+// ============================================================
+
+void drawSettingsScreen() {
+    tft.startWrite();
+    tft.fillScreen(COL_BG);
+    drawHeader("CONFIGURATION");
+    drawToggle(20, 45, config.enableBLE, "BLE Scanning");
+    drawToggle(20, 72, config.enableWiFi, "WiFi Scanning");
+    drawToggle(20, 99, config.enableLogging, "SD Logging");
+    drawToggle(20, 126, config.secureLogging, "Secure (AES)");
+    drawToggle(20, 153, config.autoBrightness, "Auto-Brightness");
+    drawToggle(20, 180, config.showBaseline, "Show Baseline");
+    drawNavbar();
+    tft.endWrite();
+}
+
+void drawToggle(int x, int y, bool state, const char* label) {
+    // Toggle track
+    tft.fillRoundRect(x + 150, y, 44, 22, 11, state ? COL_ACCENT : 0x4208);
+    // Toggle knob
+    int knobX = state ? (x + 150 + 24) : (x + 150 + 4);
+    tft.fillCircle(knobX + 7, y + 11, 8, TFT_WHITE);
+    // Label
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_WHITE);
+    tft.setCursor(x, y + 6);
+    tft.print(label);
+}
+
+// ============================================================
+// INFO SCREEN
+// ============================================================
+
+void drawInfoScreen() {
+    tft.startWrite();
+    tft.fillScreen(COL_BG);
+    drawHeader("SYSTEM STATUS");
+    tft.setTextSize(1);
+
+    int y = 40;
+    auto drawRow = [&](const char* label, String value) {
+        tft.setTextColor(COL_DIMTEXT);
+        tft.setCursor(20, y);
+        tft.print(label);
+        tft.setTextColor(TFT_WHITE);
+        tft.setCursor(170, y);
+        tft.print(value);
+        y += 18;
+    };
+
+    drawRow("Firmware:", VERSION);
+    drawRow("Battery:", String(batteryVoltage, 2) + " V");
+    drawRow("OUI Database:", String(dynamicDatabase.size()) + " entries");
+    drawRow("Priority DB:", String(priorityDB.size()) + " entries");
+    drawRow("Corr. Rules:", String(correlationRules.size()) + " rules");
+    drawRow("Active Alerts:", String(activeAlerts.size()));
+    drawRow("Detections:", String(detections.size()));
+    drawRow("Free Memory:", String(ESP.getFreeHeap() / 1024) + " KB");
+    drawRow("Touch:", i2cAvailable ? "OK" : "ERROR");
+    drawRow("SD Card:", sdCardAvailable ? "OK" : "NOT FOUND");
+
+    drawNavbar();
+    tft.endWrite();
+}
+
+// ============================================================
+// WIZARD SCREEN
+// ============================================================
+
 void drawWizardScreen() {
     tft.startWrite();
-    tft.fillScreen(TFT_BLACK);
+    tft.fillScreen(COL_BG);
     drawHeader("WELCOME");
     tft.setTextSize(1);
     tft.setTextColor(TFT_WHITE);
     if (wizardStep == 0) {
-        tft.setCursor(20, 60); tft.print("UK-OUI-SPY PRO EDITION");
+        tft.setCursor(20, 60); tft.print("UK-OUI-SPY PRO EDITION v" VERSION);
         tft.setCursor(20, 80); tft.print("Professional Surveillance Detection");
-        tft.setCursor(20, 120); tft.print("Tap 'NEXT' to begin setup.");
+        tft.setCursor(20, 110); tft.setTextColor(COL_DIMTEXT);
+        tft.print("Tiered Priority System with");
+        tft.setCursor(20, 125); tft.print("Correlation Detection Engine");
+        tft.setCursor(20, 155); tft.setTextColor(TFT_WHITE);
+        tft.print("Tap 'NEXT' to begin setup.");
     } else if (wizardStep == 1) {
-        tft.setCursor(20, 60); tft.print("SD CARD CHECK");
-        tft.setCursor(20, 80); tft.print(sdCardAvailable ? "SD Card: DETECTED" : "SD Card: NOT FOUND");
-        tft.setCursor(20, 100); tft.print("Please insert SD card for logging.");
-    } else if (wizardStep == 2) {
+        tft.setCursor(20, 60); tft.print("HARDWARE CHECK");
+        tft.setCursor(20, 85); tft.printf("Touch: %s", i2cAvailable ? "OK" : "ERROR");
+        tft.setCursor(20, 100); tft.printf("SD Card: %s", sdCardAvailable ? "DETECTED" : "NOT FOUND");
+        tft.setCursor(20, 115); tft.printf("OUI DB: %d entries", dynamicDatabase.size());
+        tft.setCursor(20, 130); tft.printf("Priority DB: %d entries", priorityDB.size());
+        tft.setCursor(20, 145); tft.printf("Corr. Rules: %d", correlationRules.size());
+    } else {
         tft.setCursor(20, 60); tft.print("SETUP COMPLETE");
-        tft.setCursor(20, 80); tft.print("Device is ready for field use.");
-        tft.setCursor(20, 120); tft.print("Tap 'FINISH' to start scanning.");
+        tft.setCursor(20, 85); tft.setTextColor(COL_ACCENT);
+        tft.print("Device is ready for field use.");
+        tft.setCursor(20, 110); tft.setTextColor(COL_DIMTEXT);
+        tft.print("Baseline devices will be filtered.");
+        tft.setCursor(20, 125); tft.print("Change in CONFIG > Show Baseline.");
+        tft.setCursor(20, 155); tft.setTextColor(TFT_WHITE);
+        tft.print("Tap 'FINISH' to start scanning.");
     }
-    tft.fillRoundRect(220, 160, 80, 30, 4, TFT_CYAN);
-    tft.setTextColor(TFT_BLACK);
-    tft.setCursor(240, 170); tft.print(wizardStep < 2 ? "NEXT" : "FINISH");
+    tft.fillRoundRect(220, 170, 80, 28, 4, COL_ACCENT);
+    tft.setTextColor(COL_BG);
+    tft.setCursor(232, 178);
+    tft.print(wizardStep < 2 ? "NEXT" : "FINISH");
     tft.endWrite();
 }
 
-void drawMainScreen() {
-    tft.startWrite();
-    tft.fillScreen(TFT_BLACK);
-    drawHeader("SURVEILLANCE LIST");
-    xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
-    auto snapshot = detections;
-    xSemaphoreGive(xDetectionMutex);
-    int y = 35;
-    for (auto &det : snapshot) {
-        if (y > 180) break;
-        tft.fillRoundRect(5, y, 310, 32, 4, 0x18C3);
-        tft.fillRect(5, y, 4, 32, getRelevanceColor(det.relevance));
-        tft.setCursor(15, y + 6);
-        tft.setTextColor(TFT_WHITE);
-        tft.print(det.manufacturer);
-        tft.setCursor(15, y + 18);
-        tft.setTextColor(0xAD55);
-        tft.printf("%s | %d dBm", getCategoryName(det.category), det.rssi);
-        y += 36;
-    }
-    drawNavbar();
-    tft.endWrite();
-}
-
-void drawRadarScreen() {
-    tft.startWrite();
-    tft.fillScreen(TFT_BLACK);
-    drawHeader("PROXIMITY RADAR");
-    int cx = 160, cy = 120, r = 80;
-    tft.drawCircle(cx, cy, r, 0x2104);
-    tft.drawCircle(cx, cy, r/2, 0x2104);
-    tft.drawLine(cx-r, cy, cx+r, cy, 0x2104);
-    tft.drawLine(cx, cy-r, cx, cy+r, 0x2104);
-    xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
-    auto snapshot = detections;
-    xSemaphoreGive(xDetectionMutex);
-    for (auto &det : snapshot) {
-        float dist = map(constrain(det.rssi, -100, -30), -100, -30, r, 10);
-        float angle = (float)random(0, 360) * PI / 180.0;
-        int px = cx + dist * cos(angle);
-        int py = cy + dist * sin(angle);
-        tft.fillCircle(px, py, 4, getRelevanceColor(det.relevance));
-    }
-    drawNavbar();
-    tft.endWrite();
-}
-
-void drawSettingsScreen() {
-    tft.startWrite();
-    tft.fillScreen(TFT_BLACK);
-    drawHeader("CONFIGURATION");
-    drawToggle(20, 50, config.enableBLE, "BLE Scanning");
-    drawToggle(20, 80, config.enableWiFi, "WiFi Scanning");
-    drawToggle(20, 110, config.enableLogging, "SD Logging");
-    drawToggle(20, 140, config.secureLogging, "Secure (AES)");
-    drawToggle(20, 170, config.autoBrightness, "Auto-Brightness");
-    drawNavbar();
-    tft.endWrite();
-}
-
-void drawInfoScreen() {
-    tft.startWrite();
-    tft.fillScreen(TFT_BLACK);
-    drawHeader("SYSTEM STATUS");
-    tft.setTextColor(TFT_WHITE);
-    tft.setCursor(20, 50); tft.printf("Firmware: %s", VERSION);
-    tft.setCursor(20, 70); tft.printf("Battery: %.2f V", batteryVoltage);
-    tft.setCursor(20, 90); tft.printf("OUI DB: %d entries", dynamicDatabase.size());
-    tft.setCursor(20, 110); tft.printf("Memory: %d KB Free", ESP.getFreeHeap() / 1024);
-    tft.setCursor(20, 130); tft.printf("Touch: %s", i2cAvailable ? "OK" : "ERROR");
-    drawNavbar();
-    tft.endWrite();
-}
+// ============================================================
+// TOUCH HANDLING
+// ============================================================
 
 void handleTouchGestures() {
+    static unsigned long lastTouch = 0;
     uint16_t x, y;
-    if (readCapacitiveTouch(&x, &y)) {
-        if (currentScreen == SCREEN_WIZARD) {
-            if (x > 220 && y > 160) {
-                wizardStep++;
-                if (wizardStep > 2) {
-                    config.setupComplete = true;
-                    saveConfig();
-                    currentScreen = SCREEN_MAIN;
-                }
-            }
-        } else if (y > 210) {
-            int newScreen = x / 80;
-            if (newScreen >= 0 && newScreen <= 3) currentScreen = (Screen)(newScreen + 1);
-        } else if (currentScreen == SCREEN_SETTINGS) {
-            if (x > 170 && x < 215) {
-                if (y > 50 && y < 72) config.enableBLE = !config.enableBLE;
-                else if (y > 80 && y < 102) config.enableWiFi = !config.enableWiFi;
-                else if (y > 110 && y < 132) config.enableLogging = !config.enableLogging;
-                else if (y > 140 && y < 162) config.secureLogging = !config.secureLogging;
-                else if (y > 170 && y < 192) config.autoBrightness = !config.autoBrightness;
+    if (!readCapacitiveTouch(&x, &y)) return;
+    if (millis() - lastTouch < 250) return;  // Debounce
+    lastTouch = millis();
+
+    if (currentScreen == SCREEN_WIZARD) {
+        if (x > 220 && y > 170) {
+            wizardStep++;
+            if (wizardStep > 2) {
+                config.setupComplete = true;
                 saveConfig();
+                currentScreen = SCREEN_MAIN;
             }
+        }
+    } else if (y > 210) {
+        // Navbar tap
+        int newScreen = x / 80;
+        if (newScreen >= 0 && newScreen <= 3) {
+            currentScreen = (Screen)(newScreen + 1);
+            scrollOffset = 0;  // Reset scroll on page change
+        }
+    } else if (currentScreen == SCREEN_MAIN) {
+        // Scroll: top half = scroll up, bottom half = scroll down
+        if (y < 120 && scrollOffset > 0) {
+            scrollOffset--;
+        } else if (y >= 120 && y < 210 && scrollOffset < maxScroll) {
+            scrollOffset++;
+        }
+    } else if (currentScreen == SCREEN_SETTINGS) {
+        // Toggle taps (hit area on the toggle switches)
+        if (x > 150 && x < 220) {
+            if (y > 45 && y < 67) config.enableBLE = !config.enableBLE;
+            else if (y > 72 && y < 94) config.enableWiFi = !config.enableWiFi;
+            else if (y > 99 && y < 121) config.enableLogging = !config.enableLogging;
+            else if (y > 126 && y < 148) config.secureLogging = !config.secureLogging;
+            else if (y > 153 && y < 175) config.autoBrightness = !config.autoBrightness;
+            else if (y > 180 && y < 202) config.showBaseline = !config.showBaseline;
+            saveConfig();
         }
     }
 }
+
+// ============================================================
+// UTILITIES
+// ============================================================
 
 void setBrightness(int level) {
     config.brightness = constrain(level, 0, 255);
@@ -453,16 +1141,33 @@ void encryptAndLog(String data) {
     mbedtls_aes_context aes;
     unsigned char key[16];
     memcpy(key, config.encryptionKey, 16);
-    unsigned char input[16];
-    unsigned char output[16];
-    memset(input, 0, 16);
-    strncpy((char*)input, data.c_str(), 15);
+
+    // Multi-block encryption for longer data
+    int dataLen = data.length();
+    int blocks = (dataLen + 15) / 16;
+
+    File f = SD.open("/secure.log", FILE_APPEND);
+    if (!f) return;
+
+    // Write block count header
+    f.write((uint8_t)blocks);
+
     mbedtls_aes_init(&aes);
     mbedtls_aes_setkey_enc(&aes, key, 128);
-    mbedtls_aes_crypt_ecb(&aes, MBEDTLS_AES_ENCRYPT, input, output);
+
+    for (int b = 0; b < blocks; b++) {
+        unsigned char input[16];
+        unsigned char output[16];
+        memset(input, 0, 16);
+        int offset = b * 16;
+        int copyLen = min(16, dataLen - offset);
+        if (copyLen > 0) memcpy(input, data.c_str() + offset, copyLen);
+        mbedtls_aes_crypt_ecb(&aes, MBEDTLS_AES_ENCRYPT, input, output);
+        f.write(output, 16);
+    }
+
     mbedtls_aes_free(&aes);
-    File f = SD.open("/secure.log", FILE_APPEND);
-    if (f) { f.write(output, 16); f.close(); }
+    f.close();
 }
 
 void saveConfig() {
@@ -473,6 +1178,7 @@ void saveConfig() {
     preferences.putBool("log", config.enableLogging);
     preferences.putBool("secure", config.secureLogging);
     preferences.putBool("auto", config.autoBrightness);
+    preferences.putBool("baseline", config.showBaseline);
     preferences.end();
 }
 
@@ -484,12 +1190,21 @@ void loadConfig() {
     config.enableLogging = preferences.getBool("log", true);
     config.secureLogging = preferences.getBool("secure", false);
     config.autoBrightness = preferences.getBool("auto", true);
+    config.showBaseline = preferences.getBool("baseline", false);
     preferences.end();
 }
 
 void enterDeepSleep() {
-    tft.fillScreen(TFT_BLACK);
+    tft.fillScreen(COL_BG);
+    tft.setTextSize(1);
+    tft.setTextColor(COL_DIMTEXT);
+    tft.setCursor(100, 115);
+    tft.print("SLEEPING...");
+    delay(500);
     digitalWrite(TFT_BL, TFT_BACKLIGHT_OFF);
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_SDA, 0); // Wake on touch
+    digitalWrite(LED_PIN, LOW);
+    digitalWrite(LED_G_PIN, LOW);
+    digitalWrite(LED_B_PIN, LOW);
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_SDA, 0);
     esp_deep_sleep_start();
 }
