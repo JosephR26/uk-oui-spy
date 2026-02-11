@@ -8,7 +8,7 @@
  *           threat scoring, swipe UI, OTA updates
  */
 
-#define VERSION "1.2.0"
+#define VERSION "1.2.1"
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -26,6 +26,7 @@
 #include "wifi_promiscuous.h"
 
 // CST820 capacitive touch controller (I2C)
+// Address: 0x15, SDA: 27, SCL: 22
 #define TOUCH_ADDR  0x15
 #define TOUCH_SDA   27
 #define TOUCH_SCL   22
@@ -174,20 +175,36 @@ void UITask(void *pvParameters) {
     }
 }
 
+// Robust CST820 touch reading
 bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
     Wire.beginTransmission(TOUCH_ADDR);
-    Wire.write(0x02);
+    Wire.write(0x00); // Start register for CST820
     if (Wire.endTransmission() != 0) return false;
-    Wire.requestFrom((uint8_t)TOUCH_ADDR, (uint8_t)5);
-    if (Wire.available() < 5) return false;
-    uint8_t numPoints = Wire.read();
-    if ((numPoints & 0x0F) == 0) return false;
-    uint8_t xHigh = Wire.read(); uint8_t xLow = Wire.read();
-    uint8_t yHigh = Wire.read(); uint8_t yLow = Wire.read();
-    uint16_t rawX = ((xHigh & 0x0F) << 8) | xLow;
-    uint16_t rawY = ((yHigh & 0x0F) << 8) | yLow;
-    *x = rawY; *y = 239 - rawX;
-    if (*x > 319) *x = 319; if (*y > 239) *y = 239;
+
+    // Read 6 bytes: [0]Status, [1]Points, [2]X_High, [3]X_Low, [4]Y_High, [5]Y_Low
+    if (Wire.requestFrom(TOUCH_ADDR, 6) != 6) return false;
+    
+    uint8_t status = Wire.read();
+    uint8_t points = Wire.read() & 0x0F;
+    if (points == 0) return false;
+
+    uint8_t xH = Wire.read();
+    uint8_t xL = Wire.read();
+    uint8_t yH = Wire.read();
+    uint8_t yL = Wire.read();
+
+    uint16_t rawX = ((xH & 0x0F) << 8) | xL;
+    uint16_t rawY = ((yH & 0x0F) << 8) | yL;
+
+    // Coordinate mapping for Rotation 1 (Landscape)
+    // Raw CST820 is usually 240x320 portrait
+    *x = rawY;
+    *y = 239 - rawX;
+
+    // Bounds check
+    if (*x > 319) *x = 319;
+    if (*y > 239) *y = 239;
+
     return true;
 }
 
@@ -203,7 +220,9 @@ void setup() {
     pinMode(TFT_BL, OUTPUT);
     digitalWrite(TFT_BL, HIGH);
     
+    // Initialize I2C with specific pins
     Wire.begin(TOUCH_SDA, TOUCH_SCL);
+    
     initDisplay();
     initSDCard();
     
@@ -221,7 +240,6 @@ void setup() {
 }
 
 void loop() {
-    // Empty as we use FreeRTOS tasks
     vTaskDelete(NULL);
 }
 
@@ -250,6 +268,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
     String mac = formatMAC(macAddress);
     String oui = extractOUI(mac);
     
+    xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
     for (const auto& entry : dynamicDatabase) {
         if (oui.equalsIgnoreCase(entry.oui)) {
             Detection det;
@@ -273,10 +292,10 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
             break;
         }
     }
+    xSemaphoreGive(xDetectionMutex);
 }
 
 void addDetection(Detection det) {
-    xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
     bool found = false;
     for (auto &d : detections) {
         if (d.macAddress == det.macAddress && (millis() - d.timestamp) < 30000) {
@@ -292,16 +311,15 @@ void addDetection(Detection det) {
         detections.insert(detections.begin(), det);
         if (detections.size() > MAX_DETECTIONS) detections.pop_back();
     }
-    xSemaphoreGive(xDetectionMutex);
 }
 
 void updateDisplay() {
     if (currentScreen == 0) drawMainScreen();
-    // Other screens omitted for brevity in this example but should be implemented
+    else if (currentScreen == 1) drawSettingsScreen();
 }
 
 void drawMainScreen() {
-    tft.startWrite(); // Use startWrite/endWrite for better performance
+    tft.startWrite();
     tft.fillScreen(TFT_NAVY);
     tft.setTextSize(2);
     tft.setTextColor(TFT_CYAN);
@@ -316,6 +334,19 @@ void drawMainScreen() {
         y += 42;
     }
     xSemaphoreGive(xDetectionMutex);
+    tft.endWrite();
+}
+
+void drawSettingsScreen() {
+    tft.startWrite();
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextSize(2);
+    tft.setTextColor(TFT_YELLOW);
+    tft.setCursor(10, 10);
+    tft.print("SETTINGS");
+    tft.setTextSize(1);
+    tft.setCursor(10, 40);
+    tft.print("Tap top-left to return");
     tft.endWrite();
 }
 
@@ -346,7 +377,10 @@ String extractOUI(String mac) {
 }
 
 void sortDetectionsByThreat() {
-    // Implementation of sorting
+    // Basic sorting by RSSI for now
+    std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b) {
+        return a.rssi > b.rssi;
+    });
 }
 
 void playProximityAlert(int8_t rssi, RelevanceLevel relevance) {
@@ -366,7 +400,12 @@ void logDetectionToSD(Detection &det) {
 void handleTouchGestures() {
     uint16_t x, y;
     if (readCapacitiveTouch(&x, &y)) {
-        // Basic tap handling for settings
-        if (y < 30 && x > 280) currentScreen = 1;
+        if (currentScreen == 0) {
+            // Top right for settings
+            if (x > 250 && y < 50) currentScreen = 1;
+        } else if (currentScreen == 1) {
+            // Top left to return
+            if (x < 50 && y < 50) currentScreen = 0;
+        }
     }
 }
