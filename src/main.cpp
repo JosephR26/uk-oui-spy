@@ -31,8 +31,16 @@
 #define TOUCH_SDA   27
 #define TOUCH_SCL   22
 
-// Pin definitions
-#define TFT_BL 21
+// Pin definitions (TFT_BL defined in platformio.ini build_flags)
+// Derive backlight off state from TFT_BACKLIGHT_ON (set in platformio.ini)
+#ifndef TFT_BACKLIGHT_ON
+#define TFT_BACKLIGHT_ON HIGH
+#endif
+#if TFT_BACKLIGHT_ON == HIGH
+#define TFT_BACKLIGHT_OFF LOW
+#else
+#define TFT_BACKLIGHT_OFF HIGH
+#endif
 #define SD_CS 5
 #define BUZZER_PIN 25
 #define LED_PIN 4
@@ -186,7 +194,7 @@ void setup() {
     pinMode(LED_B_PIN, OUTPUT);
     pinMode(TFT_BL, OUTPUT);
     pinMode(BAT_ADC, INPUT);
-    digitalWrite(TFT_BL, HIGH);
+    digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
     
     Wire.begin(TOUCH_SDA, TOUCH_SCL);
     Wire.beginTransmission(TOUCH_ADDR);
@@ -429,7 +437,11 @@ void handleTouchGestures() {
 
 void setBrightness(int level) {
     config.brightness = constrain(level, 0, 255);
+    #if TFT_BACKLIGHT_ON == HIGH
     analogWrite(TFT_BL, config.brightness);
+    #else
+    analogWrite(TFT_BL, 255 - config.brightness);
+    #endif
 }
 
 float readBattery() {
@@ -477,7 +489,7 @@ void loadConfig() {
 
 void enterDeepSleep() {
     tft.fillScreen(TFT_BLACK);
-    digitalWrite(TFT_BL, LOW);
+    digitalWrite(TFT_BL, TFT_BACKLIGHT_OFF);
     esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_SDA, 0); // Wake on touch
     esp_deep_sleep_start();
 }
