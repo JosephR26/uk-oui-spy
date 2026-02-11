@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "3.1.0",
   "description": "UK-OUI-SPY PRO Priority Database - Field Validated Entries",
   "priority_tiers": {
     "5": "HIGH VALUE TARGET - Immediate alert",
@@ -9,204 +9,63 @@
     "1": "BASELINE - Filter/suppress"
   },
   "entries": [
-    {
-      "oui": "00:60:37",
-      "label": "Skydio Controller",
-      "category": "drone",
-      "priority": 5,
-      "protocol": "BLE",
-      "context": "Autonomous drone operations",
-      "confidence": 0.98,
-      "correlation_group": "skydio_ops"
-    },
-    {
-      "oui": "90:9F:33",
-      "label": "Sky Drone",
-      "category": "drone",
-      "priority": 5,
-      "protocol": "BLE",
-      "context": "Autonomous drone operations",
-      "confidence": 0.95,
-      "correlation_group": "skydio_ops"
-    },
-    {
-      "oui": "60:60:1F",
-      "label": "DJI",
-      "category": "drone",
-      "priority": 5,
-      "protocol": "WiFi",
-      "context": "Commercial/police drone platform",
-      "confidence": 0.97,
-      "correlation_group": "dji_ops"
-    },
-    {
-      "oui": "B8:69:F4",
-      "label": "Ubiquiti Networks",
-      "category": "cctv_infrastructure",
-      "priority": 4,
-      "protocol": "WiFi",
-      "context": "UniFi cameras and access points",
-      "confidence": 0.88,
-      "correlation_group": "ubiquiti_infra"
-    },
-    {
-      "oui": "00:12:12",
-      "label": "Hikvision",
-      "category": "cctv",
-      "priority": 5,
-      "protocol": "WiFi",
-      "context": "Government/council CCTV systems",
-      "confidence": 0.99,
-      "correlation_group": "hikvision_net"
-    },
-    {
-      "oui": "00:40:8C",
-      "label": "Axis Communications",
-      "category": "cctv",
-      "priority": 5,
-      "protocol": "WiFi",
-      "context": "Professional IP cameras",
-      "confidence": 0.99,
-      "correlation_group": "axis_net"
-    },
-    {
-      "oui": "A4:DA:32",
-      "label": "Dahua Technology",
-      "category": "cctv",
-      "priority": 5,
-      "protocol": "WiFi",
-      "context": "Government/council CCTV systems",
-      "confidence": 0.99,
-      "correlation_group": "dahua_net"
-    },
-    {
-      "oui": "3C:EF:8C",
-      "label": "Dahua Technology",
-      "category": "cctv",
-      "priority": 5,
-      "protocol": "WiFi",
-      "context": "IP cameras and NVRs",
-      "confidence": 0.97,
-      "correlation_group": "dahua_net"
-    },
-    {
-      "oui": "E0:50:8B",
-      "label": "Genetec",
-      "category": "facial_recognition",
-      "priority": 5,
-      "protocol": "WiFi",
-      "context": "Facial recognition and city surveillance",
-      "confidence": 0.96,
-      "correlation_group": "genetec_net"
-    },
-    {
-      "oui": "00:18:7D",
-      "label": "Pelco (Motorola)",
-      "category": "cctv",
-      "priority": 5,
-      "protocol": "WiFi",
-      "context": "Police and transport CCTV",
-      "confidence": 0.95,
-      "correlation_group": "pelco_net"
-    },
-    {
-      "oui": "D8:60:CF",
-      "label": "Smart Dashcam",
-      "category": "vehicle_cctv",
-      "priority": 3,
-      "protocol": "WiFi",
-      "context": "Delivery fleet and bodycam systems",
-      "confidence": 0.90,
-      "correlation_group": "vehicle_cam"
-    },
-    {
-      "oui": "74:83:C2",
-      "label": "GoPro",
-      "category": "action_cam",
-      "priority": 3,
-      "protocol": "WiFi",
-      "context": "Action cameras, potential bodycam use",
-      "confidence": 0.92,
-      "correlation_group": "gopro_cam"
-    },
-    {
-      "oui": "18:B4:30",
-      "label": "Nest (Google)",
-      "category": "doorbell_cam",
-      "priority": 2,
-      "protocol": "WiFi",
-      "context": "Consumer doorbell and home cameras",
-      "confidence": 0.85,
-      "correlation_group": "nest_home"
-    },
-    {
-      "oui": "EC:71:DB",
-      "label": "Ring (Amazon)",
-      "category": "doorbell_cam",
-      "priority": 2,
-      "protocol": "WiFi",
-      "context": "Consumer doorbell cameras",
-      "confidence": 0.85,
-      "correlation_group": "ring_home"
-    },
-    {
-      "oui": "74:DA:88",
-      "label": "Sky CPE",
-      "category": "baseline",
-      "priority": 1,
-      "protocol": "WiFi",
-      "context": "Consumer broadband router",
-      "confidence": 0.99,
-      "correlation_group": "consumer_isp"
-    },
-    {
-      "oui": "FC:F8:AE",
-      "label": "BT/EE Hub",
-      "category": "baseline",
-      "priority": 1,
-      "protocol": "WiFi",
-      "context": "Consumer broadband router",
-      "confidence": 0.99,
-      "correlation_group": "consumer_isp"
-    },
-    {
-      "oui": "20:8B:FB",
-      "label": "TP-Link",
-      "category": "baseline",
-      "priority": 1,
-      "protocol": "WiFi",
-      "context": "Consumer networking equipment",
-      "confidence": 0.99,
-      "correlation_group": "consumer_isp"
-    }
+    {"oui": "00:60:37", "label": "Skydio Controller", "context": "Autonomous drone ops", "correlation_group": "skydio_ops", "priority": 5, "confidence": 0.98},
+    {"oui": "90:9F:33", "label": "Sky Drone", "context": "Autonomous drone ops", "correlation_group": "skydio_ops", "priority": 5, "confidence": 0.95},
+    {"oui": "60:60:1F", "label": "DJI", "context": "Commercial/police drone", "correlation_group": "dji_ops", "priority": 5, "confidence": 0.97},
+    {"oui": "00:12:12", "label": "Hikvision", "context": "Govt/council CCTV", "correlation_group": "hikvision_net", "priority": 5, "confidence": 0.99},
+    {"oui": "00:40:8C", "label": "Axis Communications", "context": "Professional IP cameras", "correlation_group": "axis_net", "priority": 5, "confidence": 0.99},
+    {"oui": "A4:DA:32", "label": "Dahua Technology", "context": "Govt/council CCTV", "correlation_group": "dahua_net", "priority": 5, "confidence": 0.99},
+    {"oui": "3C:EF:8C", "label": "Dahua Technology", "context": "IP cameras and NVRs", "correlation_group": "dahua_net", "priority": 5, "confidence": 0.97},
+    {"oui": "6C:C2:17", "label": "Dahua Technology", "context": "Security cameras", "correlation_group": "dahua_net", "priority": 5, "confidence": 0.97},
+    {"oui": "E0:50:8B", "label": "Genetec", "context": "Facial recognition", "correlation_group": "genetec_net", "priority": 5, "confidence": 0.96},
+    {"oui": "00:18:7D", "label": "Pelco (Motorola)", "context": "Police/transport CCTV", "correlation_group": "pelco_net", "priority": 5, "confidence": 0.95},
+    {"oui": "00:0A:28", "label": "Motorola Solutions", "context": "ANPR systems", "correlation_group": "motorola_anpr", "priority": 5, "confidence": 0.97},
+    {"oui": "00:1E:C0", "label": "Digital Barriers", "context": "Police body cameras", "correlation_group": "bodycam_net", "priority": 5, "confidence": 0.95},
+    {"oui": "00:0D:66", "label": "FLIR Systems", "context": "Thermal cameras", "correlation_group": "flir_net", "priority": 5, "confidence": 0.95},
+    {"oui": "00:80:F0", "label": "Bosch Security", "context": "Council/retail CCTV", "correlation_group": "bosch_net", "priority": 4, "confidence": 0.93},
+    {"oui": "00:1A:3F", "label": "Hanwha Techwin", "context": "Samsung/Hanwha CCTV", "correlation_group": "hanwha_net", "priority": 4, "confidence": 0.93},
+    {"oui": "00:50:C2", "label": "Milestone Systems", "context": "VMS infrastructure", "correlation_group": "milestone_net", "priority": 4, "confidence": 0.90},
+    {"oui": "B8:69:F4", "label": "Ubiquiti Networks", "context": "UniFi cameras/APs", "correlation_group": "ubiquiti_infra", "priority": 4, "confidence": 0.88},
+    {"oui": "18:E8:29", "label": "Ubiquiti Networks", "context": "UniFi cameras", "correlation_group": "ubiquiti_infra", "priority": 4, "confidence": 0.88},
+    {"oui": "74:83:C2", "label": "Ubiquiti Networks", "context": "UniFi cameras", "correlation_group": "ubiquiti_infra", "priority": 4, "confidence": 0.88},
+    {"oui": "00:1C:B3", "label": "Cisco Meraki", "context": "Cloud managed cameras", "correlation_group": "meraki_net", "priority": 4, "confidence": 0.85},
+    {"oui": "B0:A7:B9", "label": "Reolink", "context": "WiFi cameras", "correlation_group": "reolink_cam", "priority": 3, "confidence": 0.88},
+    {"oui": "D8:60:CF", "label": "Smart Dashcam", "context": "Delivery/bodycam", "correlation_group": "vehicle_cam", "priority": 3, "confidence": 0.90},
+    {"oui": "28:87:BA", "label": "GoPro", "context": "Action cams (alt OUI)", "correlation_group": "gopro_cam", "priority": 3, "confidence": 0.92},
+    {"oui": "38:AB:41", "label": "Texas Instruments", "context": "Cardiff smart poles", "correlation_group": "smart_city", "priority": 3, "confidence": 0.85},
+    {"oui": "AC:64:CF", "label": "Fn-Link Technology", "context": "Cardiff pole network", "correlation_group": "smart_city", "priority": 3, "confidence": 0.85},
+    {"oui": "50:C7:BF", "label": "TP-Link Tapo", "context": "Tapo cameras", "correlation_group": "tplink_cam", "priority": 2, "confidence": 0.85},
+    {"oui": "74:C6:3B", "label": "Ring (Amazon)", "context": "Consumer doorbell cam", "correlation_group": "ring_home", "priority": 2, "confidence": 0.85},
+    {"oui": "EC:71:DB", "label": "Ring (Amazon)", "context": "Consumer doorbell cam", "correlation_group": "ring_home", "priority": 2, "confidence": 0.85},
+    {"oui": "18:B4:30", "label": "Nest (Google)", "context": "Consumer doorbell cam", "correlation_group": "nest_home", "priority": 2, "confidence": 0.85},
+    {"oui": "74:DA:88", "label": "Sky CPE", "context": "Consumer broadband", "correlation_group": "consumer_isp", "priority": 1, "confidence": 0.99},
+    {"oui": "FC:F8:AE", "label": "BT/EE Hub", "context": "Consumer broadband", "correlation_group": "consumer_isp", "priority": 1, "confidence": 0.99},
+    {"oui": "20:8B:FB", "label": "TP-Link", "context": "Consumer networking", "correlation_group": "consumer_isp", "priority": 1, "confidence": 0.99}
   ],
   "correlation_rules": [
     {
       "id": "skydio_active_ops",
       "name": "SKYDIO OPS ACTIVE",
-      "description": "Skydio autonomous drone operation detected - controller and drone both present",
+      "description": "Skydio controller + drone both detected",
       "required_groups": ["skydio_ops"],
       "min_devices": 2,
-      "alert_level": "CRITICAL",
-      "led_pattern": "red_fast_blink"
+      "alert_level": "CRITICAL"
     },
     {
       "id": "dji_active_ops",
       "name": "DJI DRONE OPS",
-      "description": "DJI drone platform detected in proximity",
+      "description": "DJI drone platform detected",
       "required_groups": ["dji_ops"],
       "min_devices": 1,
-      "alert_level": "HIGH",
-      "led_pattern": "red_blink"
+      "alert_level": "HIGH"
     },
     {
       "id": "surveillance_cluster",
       "name": "SURVEILLANCE CLUSTER",
-      "description": "Multiple surveillance infrastructure devices detected - possible monitored zone",
-      "required_groups": ["hikvision_net", "axis_net", "dahua_net", "pelco_net", "ubiquiti_infra"],
+      "description": "Multiple surveillance devices - monitored zone",
+      "required_groups": ["hikvision_net", "axis_net", "dahua_net", "pelco_net", "ubiquiti_infra", "bosch_net", "hanwha_net"],
       "min_devices": 3,
-      "alert_level": "HIGH",
-      "led_pattern": "red_pulse"
+      "alert_level": "HIGH"
     },
     {
       "id": "facial_recognition_zone",
@@ -214,8 +73,15 @@
       "description": "Facial recognition infrastructure detected",
       "required_groups": ["genetec_net"],
       "min_devices": 1,
-      "alert_level": "CRITICAL",
-      "led_pattern": "red_fast_blink"
+      "alert_level": "CRITICAL"
+    },
+    {
+      "id": "smart_city_zone",
+      "name": "SMART CITY ZONE",
+      "description": "Smart city infrastructure cluster detected",
+      "required_groups": ["smart_city"],
+      "min_devices": 2,
+      "alert_level": "HIGH"
     }
   ]
 }

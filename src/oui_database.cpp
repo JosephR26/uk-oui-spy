@@ -142,8 +142,59 @@ bool loadOUIDatabaseFromSD(const char* path) {
 
 void initializeStaticDatabase() {
     dynamicDatabase.clear();
-    dynamicDatabase.push_back({"00:12:12", "Hikvision", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "Static Fallback"});
-    dynamicDatabase.push_back({"00:40:8C", "Axis", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "Static Fallback"});
-    dynamicDatabase.push_back({"60:60:1F", "DJI", CAT_DRONE, REL_HIGH, DEPLOY_POLICE, "Static Fallback"});
+    // Government / Council CCTV (HIGH)
+    dynamicDatabase.push_back({"00:12:12", "Hikvision", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "UK Police/Council CCTV"});
+    dynamicDatabase.push_back({"00:40:8C", "Axis Communications", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "Body Cams/CCTV"});
+    dynamicDatabase.push_back({"A4:DA:32", "Dahua Technology", CAT_CCTV, REL_HIGH, DEPLOY_COUNCIL, "Government/Council CCTV"});
+    dynamicDatabase.push_back({"3C:EF:8C", "Dahua Technology", CAT_CCTV, REL_HIGH, DEPLOY_COUNCIL, "IP Cameras and NVRs"});
+    dynamicDatabase.push_back({"6C:C2:17", "Dahua Technology", CAT_CCTV, REL_HIGH, DEPLOY_COUNCIL, "Security Cameras (Field Validated)"});
+    dynamicDatabase.push_back({"00:18:7D", "Pelco (Motorola)", CAT_CCTV, REL_HIGH, DEPLOY_TRANSPORT, "Police/Transport CCTV"});
+    dynamicDatabase.push_back({"00:80:F0", "Bosch Security", CAT_CCTV, REL_HIGH, DEPLOY_COUNCIL, "Council/Retail CCTV"});
+    dynamicDatabase.push_back({"00:1A:3F", "Hanwha Techwin", CAT_CCTV, REL_HIGH, DEPLOY_COUNCIL, "Samsung/Hanwha CCTV"});
+    dynamicDatabase.push_back({"00:50:C2", "Milestone Systems", CAT_CCTV, REL_HIGH, DEPLOY_GOVERNMENT, "VMS Infrastructure"});
+    dynamicDatabase.push_back({"E0:50:8B", "Genetec", CAT_FACIAL_RECOG, REL_HIGH, DEPLOY_GOVERNMENT, "Facial Recognition Systems"});
+
+    // Drones (HIGH)
+    dynamicDatabase.push_back({"60:60:1F", "DJI", CAT_DRONE, REL_HIGH, DEPLOY_POLICE, "Police Drones"});
+    dynamicDatabase.push_back({"00:60:37", "Skydio", CAT_DRONE, REL_HIGH, DEPLOY_POLICE, "Autonomous Drone Controller (Field Validated)"});
+    dynamicDatabase.push_back({"90:9F:33", "Sky Drone", CAT_DRONE, REL_HIGH, DEPLOY_POLICE, "Autonomous Drone Platform (Field Validated)"});
+
+    // Surveillance Infrastructure (HIGH)
+    dynamicDatabase.push_back({"B8:69:F4", "Ubiquiti Networks", CAT_CCTV, REL_HIGH, DEPLOY_PRIVATE, "UniFi Cameras (Field Validated)"});
+    dynamicDatabase.push_back({"18:E8:29", "Ubiquiti Networks", CAT_CCTV, REL_HIGH, DEPLOY_PRIVATE, "UniFi Cameras (Field Validated)"});
+    dynamicDatabase.push_back({"74:83:C2", "Ubiquiti Networks", CAT_CCTV, REL_HIGH, DEPLOY_PRIVATE, "UniFi Cameras (Field Validated)"});
+    dynamicDatabase.push_back({"00:1C:B3", "Cisco Meraki", CAT_CCTV, REL_MEDIUM, DEPLOY_RETAIL, "Cloud Managed Cameras"});
+    dynamicDatabase.push_back({"B0:A7:B9", "Reolink", CAT_CLOUD_CCTV, REL_MEDIUM, DEPLOY_PRIVATE, "WiFi Cameras (Field Validated)"});
+
+    // ANPR (HIGH)
+    dynamicDatabase.push_back({"00:0A:28", "Motorola Solutions", CAT_ANPR, REL_HIGH, DEPLOY_POLICE, "ANPR Systems"});
+
+    // Body Cameras (HIGH)
+    dynamicDatabase.push_back({"00:1E:C0", "Digital Barriers", CAT_BODYCAM, REL_HIGH, DEPLOY_POLICE, "Police Body Cameras"});
+
+    // Thermal (HIGH)
+    dynamicDatabase.push_back({"00:0D:66", "FLIR Systems", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "Thermal Cameras"});
+
+    // Vehicle / Dash Cams (MEDIUM)
+    dynamicDatabase.push_back({"D8:60:CF", "Smart Dashcam", CAT_DASH_CAM, REL_MEDIUM, DEPLOY_PRIVATE, "Delivery Fleet/Bodycam (Field Validated)"});
+    dynamicDatabase.push_back({"28:87:BA", "GoPro", CAT_DASH_CAM, REL_MEDIUM, DEPLOY_PRIVATE, "Action Cameras (Field Validated)"});
+
+    // Consumer Doorbells (LOW)
+    dynamicDatabase.push_back({"74:C6:3B", "Ring (Amazon)", CAT_DOORBELL_CAM, REL_LOW, DEPLOY_PRIVATE, "Video Doorbells"});
+    dynamicDatabase.push_back({"EC:71:DB", "Ring (Amazon)", CAT_DOORBELL_CAM, REL_LOW, DEPLOY_PRIVATE, "Video Doorbells"});
+    dynamicDatabase.push_back({"18:B4:30", "Nest (Google)", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "Cloud Cameras"});
+
+    // Smart City Infrastructure (MEDIUM)
+    dynamicDatabase.push_back({"38:AB:41", "Texas Instruments", CAT_SMART_CITY_INFRA, REL_MEDIUM, DEPLOY_COUNCIL, "Cardiff Smart Poles (Field Validated)"});
+    dynamicDatabase.push_back({"AC:64:CF", "Fn-Link Technology", CAT_SMART_CITY_INFRA, REL_MEDIUM, DEPLOY_COUNCIL, "Cardiff Pole Network (Field Validated)"});
+
+    // Consumer / Cloud CCTV (LOW)
+    dynamicDatabase.push_back({"50:C7:BF", "TP-Link", CAT_CLOUD_CCTV, REL_LOW, DEPLOY_PRIVATE, "Tapo Cameras (Field Validated)"});
+
+    // Consumer Baseline (filtered by default)
+    dynamicDatabase.push_back({"74:DA:88", "Sky CPE", CAT_UNKNOWN, REL_LOW, DEPLOY_PRIVATE, "Consumer Broadband (Baseline)"});
+    dynamicDatabase.push_back({"FC:F8:AE", "BT/EE Hub", CAT_UNKNOWN, REL_LOW, DEPLOY_PRIVATE, "Consumer Broadband (Baseline)"});
+    dynamicDatabase.push_back({"20:8B:FB", "TP-Link", CAT_UNKNOWN, REL_LOW, DEPLOY_PRIVATE, "Consumer Networking (Baseline)"});
+
     rebuildLookupTable();
 }
