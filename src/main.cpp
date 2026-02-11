@@ -1,12 +1,13 @@
 /*
- * UK-OUI-SPY ESP32
- * Portable UK Surveillance Device Detector
+ * UK-OUI-SPY ESP32 - PRO EDITION
+ * Professional UK Surveillance Device Detector
  *
  * Hardware: ESP32-2432S028 (2.8" ILI9341 TFT, capacitive touch)
- * Features: Multi-page UI (Main, Settings, Logs, Info), FreeRTOS, O(1) OUI Lookup
+ * Features: Multi-page UI, FreeRTOS, O(1) OUI Lookup, Secure Logging,
+ *           Radar Visualization, Setup Wizard, Power Management.
  */
 
-#define VERSION "1.3.3"
+#define VERSION "2.4.0-PRO"
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -19,9 +20,11 @@
 #include <algorithm>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <Preferences.h>
 #include "esp_sleep.h"
 #include "oui_database.h"
 #include "wifi_promiscuous.h"
+#include "mbedtls/aes.h"
 
 // CST820 capacitive touch controller (I2C)
 #define TOUCH_ADDR  0x15
@@ -36,10 +39,11 @@
 #define LED_G_PIN 16
 #define LED_B_PIN 17
 #define LDR_PIN 34
+#define BAT_ADC 35
 
 // UI Screens
-enum Screen { SCREEN_MAIN, SCREEN_SETTINGS, SCREEN_LOGS, SCREEN_INFO };
-Screen currentScreen = SCREEN_MAIN;
+enum Screen { SCREEN_WIZARD, SCREEN_MAIN, SCREEN_RADAR, SCREEN_SETTINGS, SCREEN_INFO };
+Screen currentScreen = SCREEN_WIZARD;
 
 // Scan modes
 enum ScanMode { SCAN_QUICK = 0, SCAN_NORMAL = 1, SCAN_POWER_SAVE = 2 };
@@ -47,15 +51,11 @@ enum AlertMode { ALERT_SILENT = 0, ALERT_BUZZER = 1, ALERT_VIBRATE = 2 };
 
 struct Detection {
     String macAddress;
-    String oui;
     String manufacturer;
     DeviceCategory category;
     RelevanceLevel relevance;
-    DeploymentType deployment;
-    String notes;
     int8_t rssi;
     unsigned long timestamp;
-    int seenCount;
     bool isBLE;
 };
 
@@ -65,20 +65,29 @@ struct Config {
     bool enableBLE = true;
     bool enableWiFi = true;
     bool enableLogging = true;
+    bool secureLogging = false;
     int brightness = 255;
     bool autoBrightness = true;
+    char encryptionKey[17] = "UK-OUI-SPY-2026";
+    bool setupComplete = false;
+    int sleepTimeout = 300; // 5 minutes
 };
 
 // Global objects
 TFT_eSPI tft = TFT_eSPI();
 Config config;
+Preferences preferences;
 std::vector<Detection> detections;
 SemaphoreHandle_t xDetectionMutex;
 const int MAX_DETECTIONS = 50;
 unsigned long lastScanTime = 0;
+unsigned long lastInteractionTime = 0;
 int scanInterval = 5000;
 bool scanning = false;
 bool sdCardAvailable = false;
+float batteryVoltage = 0.0;
+bool i2cAvailable = false;
+int wizardStep = 0;
 
 // Function prototypes
 void initDisplay();
@@ -90,15 +99,21 @@ void scanWiFi();
 void checkOUI(String macAddress, int8_t rssi, bool isBLE);
 void addDetection(Detection det);
 void updateDisplay();
+void drawWizardScreen();
 void drawMainScreen();
+void drawRadarScreen();
 void drawSettingsScreen();
-void drawLogsScreen();
 void drawInfoScreen();
 void drawHeader(const char* title);
 void drawNavbar();
 void handleTouchGestures();
 void setBrightness(int level);
 void drawToggle(int x, int y, bool state, const char* label);
+void encryptAndLog(String data);
+float readBattery();
+void saveConfig();
+void loadConfig();
+void enterDeepSleep();
 
 // BLE Scan callback
 class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
@@ -110,7 +125,7 @@ class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
 // FreeRTOS Tasks
 void ScanTask(void *pvParameters) {
     for (;;) {
-        if (millis() - lastScanTime >= scanInterval) {
+        if (config.setupComplete && millis() - lastScanTime >= scanInterval) {
             scanning = true;
             digitalWrite(LED_PIN, HIGH);
             if (config.enableBLE) scanBLE();
@@ -134,12 +149,20 @@ void UITask(void *pvParameters) {
                 lastLDR = millis();
             }
         }
+        batteryVoltage = readBattery();
         updateDisplay();
+        
+        // Power Management
+        if (millis() - lastInteractionTime > (config.sleepTimeout * 1000)) {
+            enterDeepSleep();
+        }
+        
         vTaskDelay(pdMS_TO_TICKS(30));
     }
 }
 
 bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
+    if (!i2cAvailable) return false;
     Wire.beginTransmission(TOUCH_ADDR);
     Wire.write(0x00);
     if (Wire.endTransmission() != 0) return false;
@@ -151,6 +174,7 @@ bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
     uint16_t rawX = ((xH & 0x0F) << 8) | xL;
     uint16_t rawY = ((yH & 0x0F) << 8) | yL;
     *x = rawY; *y = 239 - rawX;
+    lastInteractionTime = millis();
     return true;
 }
 
@@ -158,14 +182,27 @@ void setup() {
     Serial.begin(115200);
     xDetectionMutex = xSemaphoreCreateMutex();
     pinMode(LED_PIN, OUTPUT);
+    pinMode(LED_G_PIN, OUTPUT);
+    pinMode(LED_B_PIN, OUTPUT);
     pinMode(TFT_BL, OUTPUT);
+    pinMode(BAT_ADC, INPUT);
     digitalWrite(TFT_BL, HIGH);
+    
     Wire.begin(TOUCH_SDA, TOUCH_SCL);
+    Wire.beginTransmission(TOUCH_ADDR);
+    if (Wire.endTransmission() == 0) i2cAvailable = true;
+    
     initDisplay();
+    loadConfig();
+    if (!config.setupComplete) currentScreen = SCREEN_WIZARD;
+    else currentScreen = SCREEN_MAIN;
+    
     initSDCard();
     if (!loadOUIDatabaseFromSD("/oui.csv")) initializeStaticDatabase();
     initBLE();
     initWiFi();
+    
+    lastInteractionTime = millis();
     xTaskCreatePinnedToCore(ScanTask, "ScanTask", 8192, NULL, 1, NULL, 0);
     xTaskCreatePinnedToCore(UITask, "UITask", 8192, NULL, 1, NULL, 1);
 }
@@ -201,6 +238,15 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
         det.rssi = rssi;
         det.timestamp = millis();
         addDetection(det);
+        
+        if (config.enableLogging && sdCardAvailable) {
+            String logData = mac + "," + String(rssi) + "," + det.manufacturer;
+            if (config.secureLogging) encryptAndLog(logData);
+            else {
+                File f = SD.open("/detections.csv", FILE_APPEND);
+                if (f) { f.println(logData); f.close(); }
+            }
+        }
     }
 }
 
@@ -221,57 +267,106 @@ void addDetection(Detection det) {
 
 void updateDisplay() {
     switch (currentScreen) {
+        case SCREEN_WIZARD: drawWizardScreen(); break;
         case SCREEN_MAIN: drawMainScreen(); break;
+        case SCREEN_RADAR: drawRadarScreen(); break;
         case SCREEN_SETTINGS: drawSettingsScreen(); break;
-        case SCREEN_LOGS: drawLogsScreen(); break;
         case SCREEN_INFO: drawInfoScreen(); break;
     }
 }
 
 void drawHeader(const char* title) {
-    tft.fillRect(0, 0, 320, 30, TFT_DARKGREY);
+    tft.fillRect(0, 0, 320, 30, 0x1082);
     tft.setTextColor(TFT_WHITE);
     tft.setTextSize(2);
     tft.setCursor(10, 7);
     tft.print(title);
+    if (scanning) tft.fillCircle(250, 15, 4, TFT_CYAN);
+    tft.drawRect(280, 8, 25, 12, TFT_WHITE);
+    tft.fillRect(305, 11, 2, 6, TFT_WHITE);
+    int batWidth = map(constrain(batteryVoltage * 100, 330, 420), 330, 420, 0, 21);
+    tft.fillRect(282, 10, batWidth, 8, batteryVoltage < 3.5 ? TFT_RED : TFT_GREEN);
 }
 
 void drawNavbar() {
-    tft.fillRect(0, 210, 320, 30, TFT_BLACK);
-    tft.drawFastHLine(0, 210, 320, TFT_DARKGREY);
+    tft.fillRect(0, 210, 320, 30, 0x0841);
+    tft.drawFastHLine(0, 210, 320, 0x2104);
     tft.setTextSize(1);
-    const char* labels[] = {"MAIN", "SET", "LOGS", "INFO"};
+    const char* labels[] = {"LIST", "RADAR", "CONFIG", "INFO"};
     for (int i = 0; i < 4; i++) {
-        tft.setTextColor(currentScreen == i ? TFT_CYAN : TFT_WHITE);
+        tft.setTextColor(currentScreen == i + 1 ? TFT_CYAN : 0x7BEF);
         tft.setCursor(20 + (i * 80), 220);
         tft.print(labels[i]);
     }
 }
 
-void drawToggle(int x, int y, bool state, const char* label) {
+void drawWizardScreen() {
+    tft.startWrite();
+    tft.fillScreen(TFT_BLACK);
+    drawHeader("WELCOME");
+    tft.setTextSize(1);
     tft.setTextColor(TFT_WHITE);
-    tft.setCursor(x, y + 5);
-    tft.print(label);
-    tft.drawRect(x + 150, y, 40, 20, TFT_WHITE);
-    if (state) tft.fillRect(x + 170, y + 2, 18, 16, TFT_GREEN);
-    else tft.fillRect(x + 152, y + 2, 18, 16, TFT_RED);
+    if (wizardStep == 0) {
+        tft.setCursor(20, 60); tft.print("UK-OUI-SPY PRO EDITION");
+        tft.setCursor(20, 80); tft.print("Professional Surveillance Detection");
+        tft.setCursor(20, 120); tft.print("Tap 'NEXT' to begin setup.");
+    } else if (wizardStep == 1) {
+        tft.setCursor(20, 60); tft.print("SD CARD CHECK");
+        tft.setCursor(20, 80); tft.print(sdCardAvailable ? "SD Card: DETECTED" : "SD Card: NOT FOUND");
+        tft.setCursor(20, 100); tft.print("Please insert SD card for logging.");
+    } else if (wizardStep == 2) {
+        tft.setCursor(20, 60); tft.print("SETUP COMPLETE");
+        tft.setCursor(20, 80); tft.print("Device is ready for field use.");
+        tft.setCursor(20, 120); tft.print("Tap 'FINISH' to start scanning.");
+    }
+    tft.fillRoundRect(220, 160, 80, 30, 4, TFT_CYAN);
+    tft.setTextColor(TFT_BLACK);
+    tft.setCursor(240, 170); tft.print(wizardStep < 2 ? "NEXT" : "FINISH");
+    tft.endWrite();
 }
 
 void drawMainScreen() {
     tft.startWrite();
     tft.fillScreen(TFT_BLACK);
-    drawHeader("LIVE SCAN");
+    drawHeader("SURVEILLANCE LIST");
     xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
     auto snapshot = detections;
     xSemaphoreGive(xDetectionMutex);
     int y = 35;
     for (auto &det : snapshot) {
         if (y > 180) break;
-        tft.fillRect(0, y, 5, 30, getRelevanceColor(det.relevance));
-        tft.setCursor(10, y + 5);
+        tft.fillRoundRect(5, y, 310, 32, 4, 0x18C3);
+        tft.fillRect(5, y, 4, 32, getRelevanceColor(det.relevance));
+        tft.setCursor(15, y + 6);
         tft.setTextColor(TFT_WHITE);
-        tft.printf("%s | %d dBm", det.manufacturer.c_str(), det.rssi);
-        y += 35;
+        tft.print(det.manufacturer);
+        tft.setCursor(15, y + 18);
+        tft.setTextColor(0xAD55);
+        tft.printf("%s | %d dBm", getCategoryName(det.category), det.rssi);
+        y += 36;
+    }
+    drawNavbar();
+    tft.endWrite();
+}
+
+void drawRadarScreen() {
+    tft.startWrite();
+    tft.fillScreen(TFT_BLACK);
+    drawHeader("PROXIMITY RADAR");
+    int cx = 160, cy = 120, r = 80;
+    tft.drawCircle(cx, cy, r, 0x2104);
+    tft.drawCircle(cx, cy, r/2, 0x2104);
+    tft.drawLine(cx-r, cy, cx+r, cy, 0x2104);
+    tft.drawLine(cx, cy-r, cx, cy+r, 0x2104);
+    xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
+    auto snapshot = detections;
+    xSemaphoreGive(xDetectionMutex);
+    for (auto &det : snapshot) {
+        float dist = map(constrain(det.rssi, -100, -30), -100, -30, r, 10);
+        float angle = (float)random(0, 360) * PI / 180.0;
+        int px = cx + dist * cos(angle);
+        int py = cy + dist * sin(angle);
+        tft.fillCircle(px, py, 4, getRelevanceColor(det.relevance));
     }
     drawNavbar();
     tft.endWrite();
@@ -280,39 +375,12 @@ void drawMainScreen() {
 void drawSettingsScreen() {
     tft.startWrite();
     tft.fillScreen(TFT_BLACK);
-    drawHeader("SETTINGS");
-    tft.setTextSize(1);
+    drawHeader("CONFIGURATION");
     drawToggle(20, 50, config.enableBLE, "BLE Scanning");
     drawToggle(20, 80, config.enableWiFi, "WiFi Scanning");
     drawToggle(20, 110, config.enableLogging, "SD Logging");
-    drawToggle(20, 140, config.autoBrightness, "Auto-Brightness");
-    drawNavbar();
-    tft.endWrite();
-}
-
-void drawLogsScreen() {
-    tft.startWrite();
-    tft.fillScreen(TFT_BLACK);
-    drawHeader("LOG HISTORY");
-    tft.setTextSize(1);
-    tft.setTextColor(TFT_WHITE);
-    if (!sdCardAvailable) {
-        tft.setCursor(20, 50); tft.print("SD Card: Not Found");
-    } else {
-        File f = SD.open("/detections.csv");
-        if (!f) {
-            tft.setCursor(20, 50); tft.print("No logs found.");
-        } else {
-            int y = 40;
-            while (f.available() && y < 180) {
-                String line = f.readStringUntil('\n');
-                tft.setCursor(10, y);
-                tft.print(line.substring(0, 40));
-                y += 15;
-            }
-            f.close();
-        }
-    }
+    drawToggle(20, 140, config.secureLogging, "Secure (AES)");
+    drawToggle(20, 170, config.autoBrightness, "Auto-Brightness");
     drawNavbar();
     tft.endWrite();
 }
@@ -320,16 +388,13 @@ void drawLogsScreen() {
 void drawInfoScreen() {
     tft.startWrite();
     tft.fillScreen(TFT_BLACK);
-    drawHeader("SYSTEM INFO");
-    tft.setTextSize(1);
+    drawHeader("SYSTEM STATUS");
     tft.setTextColor(TFT_WHITE);
-    tft.setCursor(20, 50); tft.printf("Version: %s", VERSION);
-    tft.setCursor(20, 70); tft.printf("Hardware: ESP32-2432S028");
-    tft.setCursor(20, 90); tft.printf("Display: 2.8\" ILI9341");
-    tft.setCursor(20, 110); tft.printf("Touch: CST820 Capacitive");
-    tft.setCursor(20, 130); tft.printf("Free Heap: %d KB", ESP.getFreeHeap() / 1024);
-    tft.setCursor(20, 150); tft.printf("OUI DB Size: %d", dynamicDatabase.size());
-    tft.setCursor(20, 170); tft.printf("Uptime: %d s", millis() / 1000);
+    tft.setCursor(20, 50); tft.printf("Firmware: %s", VERSION);
+    tft.setCursor(20, 70); tft.printf("Battery: %.2f V", batteryVoltage);
+    tft.setCursor(20, 90); tft.printf("OUI DB: %d entries", dynamicDatabase.size());
+    tft.setCursor(20, 110); tft.printf("Memory: %d KB Free", ESP.getFreeHeap() / 1024);
+    tft.setCursor(20, 130); tft.printf("Touch: %s", i2cAvailable ? "OK" : "ERROR");
     drawNavbar();
     tft.endWrite();
 }
@@ -337,15 +402,26 @@ void drawInfoScreen() {
 void handleTouchGestures() {
     uint16_t x, y;
     if (readCapacitiveTouch(&x, &y)) {
-        if (y > 210) { // Navbar area
+        if (currentScreen == SCREEN_WIZARD) {
+            if (x > 220 && y > 160) {
+                wizardStep++;
+                if (wizardStep > 2) {
+                    config.setupComplete = true;
+                    saveConfig();
+                    currentScreen = SCREEN_MAIN;
+                }
+            }
+        } else if (y > 210) {
             int newScreen = x / 80;
-            if (newScreen >= 0 && newScreen <= 3) currentScreen = (Screen)newScreen;
+            if (newScreen >= 0 && newScreen <= 3) currentScreen = (Screen)(newScreen + 1);
         } else if (currentScreen == SCREEN_SETTINGS) {
-            if (x > 170 && x < 210) {
-                if (y > 50 && y < 70) config.enableBLE = !config.enableBLE;
-                else if (y > 80 && y < 100) config.enableWiFi = !config.enableWiFi;
-                else if (y > 110 && y < 130) config.enableLogging = !config.enableLogging;
-                else if (y > 140 && y < 160) config.autoBrightness = !config.autoBrightness;
+            if (x > 170 && x < 215) {
+                if (y > 50 && y < 72) config.enableBLE = !config.enableBLE;
+                else if (y > 80 && y < 102) config.enableWiFi = !config.enableWiFi;
+                else if (y > 110 && y < 132) config.enableLogging = !config.enableLogging;
+                else if (y > 140 && y < 162) config.secureLogging = !config.secureLogging;
+                else if (y > 170 && y < 192) config.autoBrightness = !config.autoBrightness;
+                saveConfig();
             }
         }
     }
@@ -354,4 +430,54 @@ void handleTouchGestures() {
 void setBrightness(int level) {
     config.brightness = constrain(level, 0, 255);
     analogWrite(TFT_BL, config.brightness);
+}
+
+float readBattery() {
+    int raw = analogRead(BAT_ADC);
+    return (raw / 4095.0) * 2.0 * 3.3 * 1.1;
+}
+
+void encryptAndLog(String data) {
+    mbedtls_aes_context aes;
+    unsigned char key[16];
+    memcpy(key, config.encryptionKey, 16);
+    unsigned char input[16];
+    unsigned char output[16];
+    memset(input, 0, 16);
+    strncpy((char*)input, data.c_str(), 15);
+    mbedtls_aes_init(&aes);
+    mbedtls_aes_setkey_enc(&aes, key, 128);
+    mbedtls_aes_crypt_ecb(&aes, MBEDTLS_AES_ENCRYPT, input, output);
+    mbedtls_aes_free(&aes);
+    File f = SD.open("/secure.log", FILE_APPEND);
+    if (f) { f.write(output, 16); f.close(); }
+}
+
+void saveConfig() {
+    preferences.begin("uk-oui-spy", false);
+    preferences.putBool("setup", config.setupComplete);
+    preferences.putBool("ble", config.enableBLE);
+    preferences.putBool("wifi", config.enableWiFi);
+    preferences.putBool("log", config.enableLogging);
+    preferences.putBool("secure", config.secureLogging);
+    preferences.putBool("auto", config.autoBrightness);
+    preferences.end();
+}
+
+void loadConfig() {
+    preferences.begin("uk-oui-spy", true);
+    config.setupComplete = preferences.getBool("setup", false);
+    config.enableBLE = preferences.getBool("ble", true);
+    config.enableWiFi = preferences.getBool("wifi", true);
+    config.enableLogging = preferences.getBool("log", true);
+    config.secureLogging = preferences.getBool("secure", false);
+    config.autoBrightness = preferences.getBool("auto", true);
+    preferences.end();
+}
+
+void enterDeepSleep() {
+    tft.fillScreen(TFT_BLACK);
+    digitalWrite(TFT_BL, LOW);
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_SDA, 0); // Wake on touch
+    esp_deep_sleep_start();
 }
