@@ -1,6 +1,6 @@
 # UK-OUI-SPY PRO - User Manual
 
-**Version 7.1.0**
+**Version 3.1.0**
 
 Thank you for purchasing the UK-OUI-SPY PRO, a professional-grade tool for detecting and analyzing surveillance devices. This manual will guide you through every feature of your new device.
 
@@ -30,8 +30,8 @@ Before first use, fully charge the device by connecting the included USB-C cable
 ### 2.2. Preparing the MicroSD Card
 
 1.  Obtain a microSD card (up to 32GB) and format it as **FAT32**.
-2.  Download the latest `oui.csv` database file from our official GitHub repository.
-3.  Copy the `oui.csv` file to the root directory of the microSD card.
+2.  Download the latest `oui.csv` and `priority.json` files from our official GitHub repository.
+3.  Copy both files to the root directory of the microSD card.
 4.  Insert the card into the device's microSD card slot.
 
 ### 2.3. First-Time Setup Wizard
@@ -62,8 +62,9 @@ The primary interface is the 2.8" touchscreen. A persistent navigation bar at th
 
 ### 3.2. LIST - The Detection Screen
 
-This is the default screen. It shows a live, color-coded list of all detected devices, sorted by the most recent.
+This is the default screen. It shows a live, color-coded list of all detected devices, sorted by priority tier.
 
+*   **Tiered Display**: Devices are grouped into priority tiers (e.g., `***** HIGH VALUE TARGET`) for instant threat assessment.
 *   **Filtering**: Tap the filter bar at the top (**ALL / HIGH / MED / LOW**) to show only devices of a certain relevance level.
 *   **Scrolling**: Swipe up and down on the list to scroll through detections.
 *   **Selection**: Tap on any device in the list to select it. The selected device will be highlighted and its data will be used in the **GRAPH** screen.
@@ -144,11 +145,23 @@ The device doesn't just detect; it analyzes. A composite **Threat Score (0-100)*
 *   **Dwell Time**: How long the device has been in the vicinity.
 *   **Category**: Certain categories (e.g., Facial Recognition) receive a score boost.
 
-### 5.2. Behavioral Analysis
+### 5.2. Correlation Detection Engine
+
+The device automatically identifies and alerts on coordinated surveillance operations. When a rule is triggered, a flashing red banner appears at the top of the screen.
+
+| Rule ID | Name | Description | Alert Level |
+| :--- | :--- | :--- | :--- |
+| `skydio_active_ops` | SKYDIO OPS ACTIVE | Skydio controller + drone both detected | CRITICAL |
+| `dji_active_ops` | DJI DRONE OPS | DJI drone platform detected | HIGH |
+| `surveillance_cluster` | SURVEILLANCE CLUSTER | 3+ govt CCTV devices detected | HIGH |
+| `facial_recognition_zone` | FACE RECOG ZONE | Genetec infrastructure detected | CRITICAL |
+| `smart_city_zone` | SMART CITY ZONE | 2+ smart city infrastructure devices detected | HIGH |
+
+### 5.3. Behavioral Analysis
 
 The device analyzes RSSI fluctuations to classify devices as **FIXED** (likely stationary, like a CCTV camera) or **MOBILE** (likely moving, like a bodycam or drone).
 
-### 5.3. Secure Logging (AES-128)
+### 5.4. Secure Logging (AES-128)
 
 When enabled in the Settings, all logs written to the SD card are encrypted using AES-128. This protects your sensitive detection data if the device is lost or confiscated. A companion decryption tool will be available from our GitHub repository.
 
@@ -160,7 +173,7 @@ Periodically check the official GitHub repository for new firmware releases. Fol
 
 ### 6.2. Updating the OUI Database
 
-The `oui.csv` file is the heart of the detection engine. Download the latest version from the GitHub repository and replace the file on your SD card to ensure you can detect the newest devices.
+The `oui.csv` and `priority.json` files are the heart of the detection engine. Download the latest versions from the GitHub repository and replace the files on your SD card to ensure you can detect the newest devices.
 
 ## 7. Legal Disclaimer
 

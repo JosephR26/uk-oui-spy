@@ -10,8 +10,8 @@ Welcome to your new UK-OUI-SPY PRO. Follow these simple steps to get started.
 ## 2. Prepare Your SD Card
 
 *   Format a microSD card (up to 32GB) as **FAT32**.
-*   Download the latest `oui.csv` file from our GitHub repository.
-*   Copy `oui.csv` to the root of the SD card.
+*   Download the latest `oui.csv` and `priority.json` files from our GitHub repository.
+*   Copy both files to the root of the SD card.
 *   Insert the card into the device.
 
 ## 3. Power On & First Setup
@@ -23,6 +23,7 @@ Welcome to your new UK-OUI-SPY PRO. Follow these simple steps to get started.
 ## 4. Basic Operation
 
 *   The device will begin scanning automatically.
+*   Detections are displayed in a **tiered priority list**.
 *   Use the **navigation bar** at the bottom of the screen to switch between pages (LIST, RADAR, CFG, etc.).
 *   On the **LIST** screen, swipe up and down to scroll through detections.
 

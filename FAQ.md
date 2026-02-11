@@ -18,9 +18,9 @@ A: There are several possibilities:
 3.  It may be using MAC address randomization, a technique that makes it harder to track.
 4.  Its OUI may not yet be in our database. Please help us by reporting new devices!
 
-**Q: How often should I update the `oui.csv` file?**
+**Q: How often should I update the `oui.csv` and `priority.json` files?**
 
-A: We recommend updating it monthly. New devices and manufacturers appear regularly, and an up-to-date database is key to the device's effectiveness.
+A: We recommend updating them monthly. New devices and manufacturers appear regularly, and an up-to-date database is key to the device's effectiveness.
 
 **Q: What is the battery life?**
 

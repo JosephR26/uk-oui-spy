@@ -1,4 +1,4 @@
-# UK-OUI-SPY PRO - v7.1.0
+# UK-OUI-SPY PRO - v3.1.0
 
 **Professional UK Surveillance Device Detector**
 
@@ -8,8 +8,11 @@ UK-OUI-SPY PRO is a professional-grade, portable device designed to detect and a
 
 This project is intended for security professionals, privacy advocates, and individuals concerned about the proliferation of surveillance in public and private spaces.
 
-## Key Features
+## Key Features (v3.1.0)
 
+*   **Tiered Priority Display**: Detections are now categorized into tiers (High Value, Surveillance Infra, Vehicle CCTV, etc.) for instant threat assessment.
+*   **Correlation Detection Engine**: Automatically identifies and alerts on coordinated surveillance operations, such as a drone and its controller operating in the same area.
+*   **Field-Validated Database**: The OUI database now includes 7 new entries discovered and validated during field tests in Cardiff, including smart city infrastructure.
 *   **Dual-Mode Scanning**: Simultaneously scans for both **Wi-Fi** and **Bluetooth Low Energy (BLE)** devices.
 *   **Promiscuous Mode**: Captures raw Wi-Fi management frames to detect hidden or non-broadcasting devices.
 *   **OUI Database**: Utilizes a dynamic OUI database loaded from the SD card, with a robust static fallback.
@@ -47,9 +50,9 @@ The firmware is specifically designed for the **ESP32-2432S028 (CYD)**, a low-co
 
 ## Getting Started
 
-1.  **Prepare SD Card**: Format a microSD card as FAT32. Create a file named `oui.csv` in the root directory. You can use the provided `examples/oui.csv` as a template.
+1.  **Prepare SD Card**: Format a microSD card as FAT32. Create a file named `oui.csv` and `priority.json` in the root directory. You can use the provided `examples/` files as a template.
 2.  **First Boot**: On the first boot, the device will enter a **Setup Wizard** to check the hardware (Touch, SD Card, Battery) and guide you through initial setup.
-3.  **Navigate**: Use the navigation bar at the bottom of the screen to switch between the 7 pages.
+3.  **Navigate**: Use the navigation bar at the bottom of the screen to switch between pages.
 4.  **Web Portal**: Connect your phone or laptop to the **"OUI-SPY-PRO"** Wi-Fi network (password: `spypro2026`). Open a browser and navigate to `http://192.168.4.1` to access the web dashboard.
 
 ## Documentation
@@ -62,4 +65,4 @@ This device is intended for educational and professional security auditing purpo
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LEGAL.md](LEGAL.md) file for details.
