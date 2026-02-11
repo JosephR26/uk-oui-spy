@@ -68,7 +68,10 @@ bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
 #define TFT_BL 21      // Backlight control - GPIO 21 for 2-USB variant
 #define SD_CS 5
 #define BUZZER_PIN 25  // Optional buzzer pin
-#define LED_PIN 4      // Optional LED indicator
+#define LED_PIN 4      // Red LED
+#define LED_G_PIN 16   // Green LED (CYD)
+#define LED_B_PIN 17   // Blue LED (CYD)
+#define LDR_PIN 34     // LDR Light Sensor (CYD)
 
 // Scan modes
 enum ScanMode {
@@ -238,18 +241,24 @@ void setup() {
     // Initialize peripherals
     pinMode(BUZZER_PIN, OUTPUT);
     pinMode(LED_PIN, OUTPUT);
+    pinMode(LED_G_PIN, OUTPUT);
+    pinMode(LED_B_PIN, OUTPUT);
+    pinMode(LDR_PIN, INPUT);
+    
     digitalWrite(LED_PIN, LOW);
+    digitalWrite(LED_G_PIN, HIGH); // Green ON to indicate ready (Active LOW on some CYDs)
+    digitalWrite(LED_B_PIN, LOW);
 
     // Initialize I2C for CST820 capacitive touch (SDA=27, SCL=22)
     Wire.begin(TOUCH_SDA, TOUCH_SCL);
     Serial.printf("I2C touch initialized (CST820 @ 0x%02X, SDA=%d, SCL=%d)\n", TOUCH_ADDR, TOUCH_SDA, TOUCH_SCL);
 
     // Initialize TFT backlight
-    // Try simple digitalWrite first - some 2-USB variants need this
+    // The ESP32-2432S028 (CYD) backlight is typically active HIGH on GPIO 21
     pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, LOW);   // Try LOW first (active LOW backlight)
+    digitalWrite(TFT_BL, HIGH);  // Turn ON backlight
     delay(100);
-    Serial.printf("Backlight pin %d set LOW\n", TFT_BL);
+    Serial.printf("Backlight pin %d set HIGH (ON)\n", TFT_BL);
 
     // If still dark, the backlight might be always-on or on different pin
     // The display content should still be visible
@@ -323,6 +332,16 @@ void setup() {
 void loop() {
     unsigned long currentTime = millis();
 
+    // Auto-brightness adjustment via LDR
+    static unsigned long lastLDRRead = 0;
+    if (currentTime - lastLDRRead > 2000) {
+        int ldrValue = analogRead(LDR_PIN);
+        // Map LDR (0-4095) to Brightness (50-255)
+        int targetBrightness = map(ldrValue, 0, 4095, 50, 255);
+        setBrightness(targetBrightness);
+        lastLDRRead = currentTime;
+    }
+
     // Periodic scanning
     if (currentTime - lastScanTime >= scanInterval) {
         scanning = true;
@@ -366,7 +385,8 @@ void loop() {
     // Handle touch gestures (swipe, long-press)
     handleTouchGestures();
 
-    delay(50);
+    // Reduced delay for better touch responsiveness
+    delay(10);
 }
 
 // Deep sleep for 24+ hour battery operation
@@ -378,7 +398,7 @@ void enterDeepSleep() {
     bootCount++;
 
     // Turn off display and peripherals
-    digitalWrite(TFT_BL, HIGH);  // Turn off backlight (active LOW: HIGH=off)
+    digitalWrite(TFT_BL, LOW);   // Turn off backlight (active HIGH: LOW=off)
     digitalWrite(LED_PIN, LOW);
 
     // Configure wakeup timer
@@ -392,7 +412,8 @@ void enterDeepSleep() {
 // Set display brightness (simple on/off for now)
 void setBrightness(int level) {
     config.brightness = constrain(level, 0, 255);
-    digitalWrite(TFT_BL, config.brightness > 127 ? LOW : HIGH);  // Active LOW
+    // CYD Backlight is typically active HIGH
+    digitalWrite(TFT_BL, config.brightness > 127 ? HIGH : LOW);
 }
 
 // Check if device is police/enforcement related
