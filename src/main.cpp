@@ -26,10 +26,12 @@
 #include "wifi_promiscuous.h"
 
 // CST820 capacitive touch controller (I2C)
-// ESP32-2432S028 2-USB capacitive variant: SDA=27, SCL=22
+// ESP32-2432S028 2-USB capacitive variant: SDA=33, SCL=32
 #define TOUCH_ADDR  0x15    // CST820 uses 0x15
-#define TOUCH_SDA   27
-#define TOUCH_SCL   22
+#define TOUCH_SDA   33
+#define TOUCH_SCL   32
+#define TOUCH_INT   21
+#define TOUCH_RST   25
 
 // Read CST820 touch data over I2C
 // Returns true if touched, sets x/y coordinates
@@ -240,19 +242,15 @@ void setup() {
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
 
-    // Initialize I2C for CST820 capacitive touch (SDA=27, SCL=22)
+    // Initialize TFT backlight FIRST (before anything else uses GPIO 21)
+    pinMode(TFT_BL, OUTPUT);
+    digitalWrite(TFT_BL, HIGH);  // Active HIGH for 2-USB variant
+    Serial.printf("Backlight pin %d set HIGH\n", TFT_BL);
+
+    // Initialize I2C for CST820 capacitive touch (SDA=33, SCL=32)
     Wire.begin(TOUCH_SDA, TOUCH_SCL);
     Serial.printf("I2C touch initialized (CST820 @ 0x%02X, SDA=%d, SCL=%d)\n", TOUCH_ADDR, TOUCH_SDA, TOUCH_SCL);
-
-    // Initialize TFT backlight
-    // Try simple digitalWrite first - some 2-USB variants need this
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, LOW);   // Try LOW first (active LOW backlight)
     delay(100);
-    Serial.printf("Backlight pin %d set LOW\n", TFT_BL);
-
-    // If still dark, the backlight might be always-on or on different pin
-    // The display content should still be visible
 
     // Initialize display
     initDisplay();
@@ -378,7 +376,7 @@ void enterDeepSleep() {
     bootCount++;
 
     // Turn off display and peripherals
-    digitalWrite(TFT_BL, HIGH);  // Turn off backlight (active LOW: HIGH=off)
+    digitalWrite(TFT_BL, LOW);   // Turn off backlight (active HIGH: LOW=off)
     digitalWrite(LED_PIN, LOW);
 
     // Configure wakeup timer
@@ -392,7 +390,7 @@ void enterDeepSleep() {
 // Set display brightness (simple on/off for now)
 void setBrightness(int level) {
     config.brightness = constrain(level, 0, 255);
-    digitalWrite(TFT_BL, config.brightness > 127 ? LOW : HIGH);  // Active LOW
+    digitalWrite(TFT_BL, config.brightness > 127 ? HIGH : LOW);  // Active HIGH
 }
 
 // Check if device is police/enforcement related
