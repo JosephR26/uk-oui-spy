@@ -1,0 +1,11 @@
+OUI,Manufacturer,Category,Relevance,Deployment,Notes
+00:12:12,Hikvision,1,2,0,UK Police/Council CCTV
+00:40:8C,Axis Communications,1,2,0,Body Cams/CCTV
+60:60:1F,DJI,3,2,0,Police Drones
+00:0A:28,Motorola Solutions,2,2,0,ANPR Systems
+74:C6:3B,Ring (Amazon),8,0,4,Video Doorbells
+18:B4:30,Nest Labs,5,0,4,Cloud Cameras
+00:1E:C0,Digital Barriers,4,2,0,Police Body Cameras
+00:0D:66,FLIR Systems,1,2,0,Thermal Cameras
+38:AB:41,Texas Instruments,11,1,1,Cardiff Smart Poles
+AC:64:CF,Fn-Link Technology,11,1,1,Cardiff Pole Network
