@@ -73,6 +73,14 @@ bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
 #define LED_B_PIN 17   // Blue LED (CYD)
 #define LDR_PIN 34     // LDR Light Sensor (CYD)
 
+// Backlight PWM configuration
+#define BL_PWM_CHANNEL 0
+#define BL_PWM_FREQ    5000
+#define BL_PWM_RES     8       // 8-bit resolution (0-255)
+#define BL_MIN_BRIGHTNESS 30   // Minimum brightness floor to prevent blank screen
+
+bool ldrPresent = false;  // Whether LDR sensor is detected as connected
+
 // Scan modes
 enum ScanMode {
     SCAN_QUICK = 0,     // 1-2 seconds
@@ -253,15 +261,31 @@ void setup() {
     Wire.begin(TOUCH_SDA, TOUCH_SCL);
     Serial.printf("I2C touch initialized (CST820 @ 0x%02X, SDA=%d, SCL=%d)\n", TOUCH_ADDR, TOUCH_SDA, TOUCH_SCL);
 
-    // Initialize TFT backlight
-    // The ESP32-2432S028 (CYD) backlight is typically active HIGH on GPIO 21
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, HIGH);  // Turn ON backlight
+    // Initialize TFT backlight using LEDC PWM for smooth brightness control
+    ledcSetup(BL_PWM_CHANNEL, BL_PWM_FREQ, BL_PWM_RES);
+    ledcAttachPin(TFT_BL, BL_PWM_CHANNEL);
+    ledcWrite(BL_PWM_CHANNEL, 255);  // Full brightness (active HIGH)
     delay(100);
-    Serial.printf("Backlight pin %d set HIGH (ON)\n", TFT_BL);
+    Serial.printf("Backlight PWM initialized on pin %d (channel %d, full brightness)\n", TFT_BL, BL_PWM_CHANNEL);
 
-    // If still dark, the backlight might be always-on or on different pin
-    // The display content should still be visible
+    // Detect if LDR sensor is actually connected by sampling it
+    // A floating/unconnected ADC pin reads erratically near 0 or fluctuates wildly
+    int ldrSamples[5];
+    for (int i = 0; i < 5; i++) {
+        ldrSamples[i] = analogRead(LDR_PIN);
+        delay(10);
+    }
+    int ldrAvg = (ldrSamples[0] + ldrSamples[1] + ldrSamples[2] + ldrSamples[3] + ldrSamples[4]) / 5;
+    int ldrVariance = 0;
+    for (int i = 0; i < 5; i++) {
+        int diff = ldrSamples[i] - ldrAvg;
+        ldrVariance += diff * diff;
+    }
+    ldrVariance /= 5;
+    // Consider LDR present if average is above noise floor OR readings are stable
+    // A floating pin typically reads near 0 with high variance, or stuck at 0
+    ldrPresent = (ldrAvg > 100) || (ldrAvg > 20 && ldrVariance < 500);
+    Serial.printf("LDR sensor: %s (avg=%d, variance=%d)\n", ldrPresent ? "detected" : "not detected", ldrAvg, ldrVariance);
 
     // Initialize display
     initDisplay();
@@ -332,12 +356,12 @@ void setup() {
 void loop() {
     unsigned long currentTime = millis();
 
-    // Auto-brightness adjustment via LDR
+    // Auto-brightness adjustment via LDR (only if sensor is connected)
     static unsigned long lastLDRRead = 0;
-    if (currentTime - lastLDRRead > 2000) {
+    if (ldrPresent && currentTime - lastLDRRead > 2000) {
         int ldrValue = analogRead(LDR_PIN);
-        // Map LDR (0-4095) to Brightness (50-255)
-        int targetBrightness = map(ldrValue, 0, 4095, 50, 255);
+        // Map LDR (0-4095) to Brightness with minimum floor
+        int targetBrightness = map(ldrValue, 0, 4095, BL_MIN_BRIGHTNESS, 255);
         setBrightness(targetBrightness);
         lastLDRRead = currentTime;
     }
@@ -398,7 +422,7 @@ void enterDeepSleep() {
     bootCount++;
 
     // Turn off display and peripherals
-    digitalWrite(TFT_BL, LOW);   // Turn off backlight (active HIGH: LOW=off)
+    ledcWrite(BL_PWM_CHANNEL, 0);  // Turn off backlight via PWM
     digitalWrite(LED_PIN, LOW);
 
     // Configure wakeup timer
@@ -409,11 +433,9 @@ void enterDeepSleep() {
 }
 
 // Set display brightness using LEDC PWM (0-255)
-// Set display brightness (simple on/off for now)
 void setBrightness(int level) {
-    config.brightness = constrain(level, 0, 255);
-    // CYD Backlight is typically active HIGH
-    digitalWrite(TFT_BL, config.brightness > 127 ? HIGH : LOW);
+    config.brightness = constrain(level, BL_MIN_BRIGHTNESS, 255);
+    ledcWrite(BL_PWM_CHANNEL, config.brightness);
 }
 
 // Check if device is police/enforcement related
