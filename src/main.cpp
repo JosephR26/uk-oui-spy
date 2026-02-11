@@ -8,7 +8,7 @@
  *           threat scoring, swipe UI, OTA updates
  */
 
-#define VERSION "1.2.1"
+#define VERSION "1.2.2"
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -26,7 +26,6 @@
 #include "wifi_promiscuous.h"
 
 // CST820 capacitive touch controller (I2C)
-// Address: 0x15, SDA: 27, SCL: 22
 #define TOUCH_ADDR  0x15
 #define TOUCH_SDA   27
 #define TOUCH_SCL   22
@@ -124,6 +123,15 @@ void setBrightness(int level);
 float calculateThreatScore(Detection &det);
 void sortDetectionsByThreat();
 
+// BLE Scan callback
+class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
+    void onResult(NimBLEAdvertisedDevice* advertisedDevice) {
+        String mac = advertisedDevice->getAddress().toString().c_str();
+        int8_t rssi = advertisedDevice->getRSSI();
+        checkOUI(mac, rssi, true);
+    }
+};
+
 // FreeRTOS Task Handles
 TaskHandle_t ScanTaskHandle = NULL;
 TaskHandle_t UITaskHandle = NULL;
@@ -178,33 +186,18 @@ void UITask(void *pvParameters) {
 // Robust CST820 touch reading
 bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
     Wire.beginTransmission(TOUCH_ADDR);
-    Wire.write(0x00); // Start register for CST820
+    Wire.write(0x00);
     if (Wire.endTransmission() != 0) return false;
-
-    // Read 6 bytes: [0]Status, [1]Points, [2]X_High, [3]X_Low, [4]Y_High, [5]Y_Low
     if (Wire.requestFrom(TOUCH_ADDR, 6) != 6) return false;
-    
     uint8_t status = Wire.read();
     uint8_t points = Wire.read() & 0x0F;
     if (points == 0) return false;
-
-    uint8_t xH = Wire.read();
-    uint8_t xL = Wire.read();
-    uint8_t yH = Wire.read();
-    uint8_t yL = Wire.read();
-
+    uint8_t xH = Wire.read(); uint8_t xL = Wire.read();
+    uint8_t yH = Wire.read(); uint8_t yL = Wire.read();
     uint16_t rawX = ((xH & 0x0F) << 8) | xL;
     uint16_t rawY = ((yH & 0x0F) << 8) | yL;
-
-    // Coordinate mapping for Rotation 1 (Landscape)
-    // Raw CST820 is usually 240x320 portrait
-    *x = rawY;
-    *y = 239 - rawX;
-
-    // Bounds check
-    if (*x > 319) *x = 319;
-    if (*y > 239) *y = 239;
-
+    *x = rawY; *y = 239 - rawX;
+    if (*x > 319) *x = 319; if (*y > 239) *y = 239;
     return true;
 }
 
@@ -220,13 +213,10 @@ void setup() {
     pinMode(TFT_BL, OUTPUT);
     digitalWrite(TFT_BL, HIGH);
     
-    // Initialize I2C with specific pins
     Wire.begin(TOUCH_SDA, TOUCH_SCL);
-    
     initDisplay();
     initSDCard();
     
-    // Load OUI Database
     if (!loadOUIDatabaseFromSD("/oui.csv")) {
         initializeStaticDatabase();
     }
@@ -234,13 +224,13 @@ void setup() {
     initBLE();
     initWiFi();
     
-    // Create Tasks
     xTaskCreatePinnedToCore(ScanTask, "ScanTask", 8192, NULL, 1, &ScanTaskHandle, 0);
     xTaskCreatePinnedToCore(UITask, "UITask", 8192, NULL, 1, &UITaskHandle, 1);
 }
 
 void loop() {
-    vTaskDelete(NULL);
+    // Keep the main task alive but idle
+    vTaskDelay(pdMS_TO_TICKS(1000));
 }
 
 void initDisplay() {
@@ -264,38 +254,54 @@ void initWiFi() {
     WiFi.disconnect();
 }
 
+void scanBLE() {
+    NimBLEScan* pBLEScan = NimBLEDevice::getScan();
+    pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks(), true);
+    pBLEScan->setActiveScan(true);
+    pBLEScan->setInterval(100);
+    pBLEScan->setWindow(99);
+    pBLEScan->start(2, false);
+}
+
+void scanWiFi() {
+    int n = WiFi.scanNetworks(false, true, false, 100);
+    for (int i = 0; i < n; ++i) {
+        checkOUI(WiFi.BSSIDstr(i), WiFi.RSSI(i), false);
+    }
+}
+
 void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
     String mac = formatMAC(macAddress);
     String oui = extractOUI(mac);
     
-    xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
-    for (const auto& entry : dynamicDatabase) {
-        if (oui.equalsIgnoreCase(entry.oui)) {
-            Detection det;
-            det.macAddress = mac;
-            det.oui = oui;
-            det.manufacturer = entry.manufacturer;
-            det.category = entry.category;
-            det.relevance = entry.relevance;
-            det.deployment = entry.deployment;
-            det.notes = entry.notes;
-            det.rssi = rssi;
-            det.timestamp = millis();
-            det.firstSeen = millis();
-            det.lastSeen = millis();
-            det.seenCount = 1;
-            det.isBLE = isBLE;
-            
-            addDetection(det);
-            playProximityAlert(rssi, det.relevance);
-            if (config.enableLogging && sdCardAvailable) logDetectionToSD(det);
-            break;
-        }
+    auto it = ouiLookup.find(oui);
+    if (it != ouiLookup.end()) {
+        const auto& entry = *(it->second);
+        Detection det;
+        det.macAddress = mac;
+        det.oui = oui;
+        det.manufacturer = entry.manufacturer;
+        det.category = entry.category;
+        det.relevance = entry.relevance;
+        det.deployment = entry.deployment;
+        det.notes = entry.notes;
+        det.rssi = rssi;
+        det.timestamp = millis();
+        det.firstSeen = millis();
+        det.lastSeen = millis();
+        det.seenCount = 1;
+        det.isBLE = isBLE;
+        
+        addDetection(det);
+        
+        // Blocking calls outside mutex
+        playProximityAlert(rssi, det.relevance);
+        if (config.enableLogging && sdCardAvailable) logDetectionToSD(det);
     }
-    xSemaphoreGive(xDetectionMutex);
 }
 
 void addDetection(Detection det) {
+    xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
     bool found = false;
     for (auto &d : detections) {
         if (d.macAddress == det.macAddress && (millis() - d.timestamp) < 30000) {
@@ -311,6 +317,7 @@ void addDetection(Detection det) {
         detections.insert(detections.begin(), det);
         if (detections.size() > MAX_DETECTIONS) detections.pop_back();
     }
+    xSemaphoreGive(xDetectionMutex);
 }
 
 void updateDisplay() {
@@ -319,6 +326,11 @@ void updateDisplay() {
 }
 
 void drawMainScreen() {
+    std::vector<Detection> snapshot;
+    xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
+    snapshot = detections;
+    xSemaphoreGive(xDetectionMutex);
+
     tft.startWrite();
     tft.fillScreen(TFT_NAVY);
     tft.setTextSize(2);
@@ -326,14 +338,12 @@ void drawMainScreen() {
     tft.setCursor(5, 5);
     tft.print("UK-OUI-SPY");
     
-    xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
     int y = 35;
-    for (auto &det : detections) {
+    for (auto &det : snapshot) {
         if (y > 200) break;
         drawDetection(det, y, false);
         y += 42;
     }
-    xSemaphoreGive(xDetectionMutex);
     tft.endWrite();
 }
 
@@ -377,7 +387,6 @@ String extractOUI(String mac) {
 }
 
 void sortDetectionsByThreat() {
-    // Basic sorting by RSSI for now
     std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b) {
         return a.rssi > b.rssi;
     });
@@ -401,10 +410,8 @@ void handleTouchGestures() {
     uint16_t x, y;
     if (readCapacitiveTouch(&x, &y)) {
         if (currentScreen == 0) {
-            // Top right for settings
             if (x > 250 && y < 50) currentScreen = 1;
         } else if (currentScreen == 1) {
-            // Top left to return
             if (x < 50 && y < 50) currentScreen = 0;
         }
     }

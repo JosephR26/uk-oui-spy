@@ -3,6 +3,7 @@
 #include <SD.h>
 
 std::vector<OUIEntry> dynamicDatabase;
+std::unordered_map<String, OUIEntry*> ouiLookup;
 
 const char* getCategoryName(DeviceCategory cat) {
     switch(cat) {
@@ -68,6 +69,13 @@ uint16_t getRelevanceColor(RelevanceLevel rel) {
     }
 }
 
+void rebuildLookupTable() {
+    ouiLookup.clear();
+    for (auto& entry : dynamicDatabase) {
+        ouiLookup[entry.oui] = &entry;
+    }
+}
+
 bool loadOUIDatabaseFromSD(const char* path) {
     if (!SD.exists(path)) return false;
     File file = SD.open(path);
@@ -82,31 +90,60 @@ bool loadOUIDatabaseFromSD(const char* path) {
         if (line.length() < 10) continue;
 
         // CSV: OUI,Manufacturer,Category,Relevance,Deployment,Notes
-        int c1 = line.indexOf(',');
-        int c2 = line.indexOf(',', c1 + 1);
-        int c3 = line.indexOf(',', c2 + 1);
-        int c4 = line.indexOf(',', c3 + 1);
-        int c5 = line.indexOf(',', c4 + 1);
+        const int EXPECTED_FIELDS = 6;
+        String fields[EXPECTED_FIELDS];
+        int fieldIndex = 0;
+        int start = 0;
 
-        if (c5 == -1) continue;
+        while (fieldIndex < EXPECTED_FIELDS - 1) {
+            int commaPos = line.indexOf(',', start);
+            if (commaPos < 0) break;
+            fields[fieldIndex++] = line.substring(start, commaPos);
+            start = commaPos + 1;
+        }
+        if (fieldIndex < EXPECTED_FIELDS) {
+            fields[fieldIndex++] = line.substring(start);
+        }
+
+        if (fieldIndex < EXPECTED_FIELDS) {
+            Serial.print("OUI DB: skipping malformed line: ");
+            Serial.println(line);
+            continue;
+        }
+
+        int catVal = fields[2].toInt();
+        int relVal = fields[3].toInt();
+        int depVal = fields[4].toInt();
+
+        if (catVal < 0 || catVal > CAT_MAX || relVal < 0 || relVal > REL_MAX || depVal < 0 || depVal > DEPLOY_MAX) {
+            Serial.print("OUI DB: invalid enum values in line: ");
+            Serial.println(line);
+            continue;
+        }
 
         OUIEntry entry;
-        entry.oui = line.substring(0, c1);
-        entry.manufacturer = line.substring(c1 + 1, c2);
-        entry.category = (DeviceCategory)line.substring(c2 + 1, c3).toInt();
-        entry.relevance = (RelevanceLevel)line.substring(c3 + 1, c4).toInt();
-        entry.deployment = (DeploymentType)line.substring(c4 + 1, c5).toInt();
-        entry.notes = line.substring(c5 + 1);
+        entry.oui = fields[0];
+        entry.manufacturer = fields[1];
+        entry.category = (DeviceCategory)catVal;
+        entry.relevance = (RelevanceLevel)relVal;
+        entry.deployment = (DeploymentType)depVal;
+        entry.notes = fields[5];
         
         dynamicDatabase.push_back(entry);
     }
     file.close();
-    return !dynamicDatabase.empty();
+    
+    if (!dynamicDatabase.empty()) {
+        rebuildLookupTable();
+        return true;
+    }
+    return false;
 }
 
 void initializeStaticDatabase() {
-    // Fallback static entries if SD fails
+    dynamicDatabase.clear();
     dynamicDatabase.push_back({"00:12:12", "Hikvision", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "Static Fallback"});
     dynamicDatabase.push_back({"00:40:8C", "Axis", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "Static Fallback"});
     dynamicDatabase.push_back({"60:60:1F", "DJI", CAT_DRONE, REL_HIGH, DEPLOY_POLICE, "Static Fallback"});
+    rebuildLookupTable();
 }
