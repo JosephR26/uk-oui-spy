@@ -73,7 +73,7 @@ void rebuildLookupTable() {
     ouiLookup.clear();
     ouiLookup.reserve(dynamicDatabase.size());
     for (auto& entry : dynamicDatabase) {
-        ouiLookup.emplace(toOuiKey(entry.oui), &entry);
+        ouiLookup[toOuiKey(entry.oui)] = &entry;
     }
 }
 
