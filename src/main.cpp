@@ -36,20 +36,14 @@
 #define TOUCH_ADDR  0x15
 
 #ifdef BOARD_CYD_2USB
-// 2-USB CYD variant: SDA=33, SCL=32
-// GPIO 25 serves double duty as both the buzzer output and the CST820 touch
-// controller reset line. Because tone() on this pin would reset the touch
-// controller, the buzzer is disabled for this variant (see alertBuzzer()).
-#define TOUCH_SDA       33
-#define TOUCH_SCL       32
-#define GPIO_SHARED_25  25      // physical pin shared between buzzer & touch RST
-#define TOUCH_RST       GPIO_SHARED_25
-#define BUZZER_PIN      GPIO_SHARED_25
+// 2-USB CYD variant: capacitive touch (CST820), SDA=33, SCL=32, RST=GPIO 25
+#define TOUCH_SDA   33
+#define TOUCH_SCL   32
+#define TOUCH_RST   25
 #else
-// Default / original CYD variant (resistive touch, dedicated buzzer pin)
+// Default / original CYD variant (resistive touch)
 #define TOUCH_SDA   27
 #define TOUCH_SCL   22
-#define BUZZER_PIN  25
 #endif
 
 // Backlight polarity (derived from platformio.ini)
@@ -103,7 +97,7 @@ enum Screen { SCREEN_WIZARD, SCREEN_MAIN, SCREEN_RADAR, SCREEN_SETTINGS, SCREEN_
 Screen currentScreen = SCREEN_WIZARD;
 
 enum ScanMode { SCAN_QUICK = 0, SCAN_NORMAL = 1, SCAN_POWER_SAVE = 2 };
-enum AlertMode { ALERT_SILENT = 0, ALERT_BUZZER = 1, ALERT_VIBRATE = 2 };
+enum AlertMode { ALERT_SILENT = 0, ALERT_LED = 1, ALERT_VIBRATE = 2 };
 
 // Priority entry loaded from priority.json
 struct PriorityEntry {
@@ -151,7 +145,7 @@ struct Detection {
 
 struct Config {
     ScanMode scanMode = SCAN_NORMAL;
-    AlertMode alertMode = ALERT_BUZZER;
+    AlertMode alertMode = ALERT_LED;
     bool enableBLE = true;
     bool enableWiFi = true;
     bool enableLogging = true;
@@ -222,7 +216,6 @@ void enterDeepSleep();
 bool loadPriorityDB(const char* path);
 void runCorrelationEngine();
 void drawCorrelationBanner();
-void alertBuzzer(int priority);
 void alertLED(int priority);
 uint16_t getTierColor(int priority);
 const char* getTierLabel(int priority);
@@ -399,12 +392,10 @@ void runCorrelationEngine() {
             alert.timestamp = millis();
             activeAlerts.push_back(alert);
 
-            // Trigger hardware alerts for critical correlations
+            // Trigger LED alerts for critical correlations
             if (rule.alertLevel == "CRITICAL") {
-                alertBuzzer(5);
                 alertLED(5);
             } else if (rule.alertLevel == "HIGH") {
-                alertBuzzer(4);
                 alertLED(4);
             }
         }
@@ -414,23 +405,6 @@ void runCorrelationEngine() {
 // ============================================================
 // ALERT SYSTEM
 // ============================================================
-
-void alertBuzzer(int priority) {
-#ifdef BOARD_CYD_2USB
-    // GPIO 25 is shared between BUZZER_PIN and CST820 TOUCH_RST on the
-    // 2-USB variant. Using tone() here would reset the touch controller,
-    // so buzzer is disabled; LED alerts are used instead.
-    (void)priority;
-#else
-    if (priority >= PRIORITY_CRITICAL) {
-        tone(BUZZER_PIN, 2500, 150);
-    } else if (priority >= PRIORITY_HIGH) {
-        tone(BUZZER_PIN, 2000, 100);
-    } else if (priority >= PRIORITY_MODERATE) {
-        tone(BUZZER_PIN, 1500, 80);
-    }
-#endif
-}
 
 void alertLED(int priority) {
     if (priority >= PRIORITY_CRITICAL) {
@@ -577,7 +551,7 @@ void setup() {
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
 
 #ifdef BOARD_CYD_2USB
-    // CST820 reset sequence (RST is GPIO_SHARED_25, also aliased as BUZZER_PIN)
+    // CST820 reset sequence
     pinMode(TOUCH_RST, OUTPUT);
     digitalWrite(TOUCH_RST, LOW);
     delay(10);
@@ -678,7 +652,6 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
 
     // Alert based on priority
     if (det.priority >= PRIORITY_MODERATE) {
-        alertBuzzer(det.priority);
         alertLED(det.priority);
     }
 
