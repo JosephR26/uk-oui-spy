@@ -1,12 +1,12 @@
 /*
  * ============================================================================
- *  UK-OUI-SPY PRO EDITION - v7.1.0
+ *  UK-OUI-SPY PRO EDITION - v3.1.0
  *  Professional UK Surveillance Device Detector
  * ============================================================================
  *
  *  Hardware Target: ESP32-2432S028 (CYD - 2.8" ILI9341 TFT + CST820 Touch)
  *
- *  CHANGELOG v7.1:
+ *  CHANGELOG v3.1:
  *    [x] Embedded Web UI Portal (WiFi AP + Captive Portal)
  *    [x] REST API: /api/detections, /api/config, /api/status, /api/logs
  *    [x] Premium responsive dashboard with live auto-refresh
@@ -51,7 +51,7 @@
  * ============================================================================
  */
 
-#define VERSION "7.1.0-PRO"
+#define VERSION "3.1.0-PRO"
 
 // ============================================================================
 //  FEATURE FLAGS
@@ -1033,7 +1033,7 @@ void drawWizardScreen(){
     if(wizardStep==0){
         tft.setCursor(40,55);tft.setTextSize(2);tft.print("WELCOME");tft.setTextSize(1);
         tft.setCursor(20,90);tft.print("Professional Surveillance");
-        tft.setCursor(20,105);tft.print("Device Detection System v7.1");
+        tft.setCursor(20,105);tft.print("Device Detection System v3.1");
         tft.setCursor(20,135);tft.setTextColor(0xAD55);tft.print("Tap NEXT to begin setup.");
     }else if(wizardStep==1){
         tft.setCursor(40,55);tft.setTextSize(2);tft.print("HW CHECK");tft.setTextSize(1);
@@ -1285,7 +1285,7 @@ void loadConfig(){
 // ============================================================================
 void setup() {
     Serial.begin(115200);
-    Serial.println("\n[UK-OUI-SPY] Booting v7.1 PRO Edition...");
+    Serial.println("\n[UK-OUI-SPY] Booting v3.1 PRO Edition...");
     xDetectionMutex=xSemaphoreCreateMutex();
     xHistoryMutex=xSemaphoreCreateMutex();
 
@@ -1345,7 +1345,7 @@ void setup() {
     xTaskCreatePinnedToCore(ScanTask,"ScanTask",16384,NULL,1,NULL,0);
     xTaskCreatePinnedToCore(UITask,"UITask",16384,NULL,1,NULL,1);
 
-    Serial.println("[UK-OUI-SPY] v7.1 Boot complete. System ready.");
+    Serial.println("[UK-OUI-SPY] v3.1 Boot complete. System ready.");
 }
 
 void loop(){
