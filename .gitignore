@@ -5,3 +5,6 @@
 .vscode/ipch
 *.bin
 *.elf
+.env*
+*.key
+*.pem

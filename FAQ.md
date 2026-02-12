@@ -60,5 +60,5 @@ A: Yes, the device is fully functional while connected to a USB power source.
 
 **Contact Support**
 
-If you are still experiencing issues, please contact our support team at:
-**support@your-company.com** (Replace with your actual support email)
+If you are still experiencing issues, please open an issue on GitHub:
+**https://github.com/JosephR26/uk-oui-spy/issues**

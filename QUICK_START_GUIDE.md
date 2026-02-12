@@ -40,7 +40,7 @@ For advanced features, connect your phone or laptop.
 ### Full User Manual
 
 For detailed information on all features, scan the QR code below or visit:
-**[Your Website/GitHub Link Here]**
+**https://github.com/JosephR26/uk-oui-spy**
 
 *(Imagine a QR code here)*
 
