@@ -417,23 +417,12 @@ void scanWiFi(){
     #endif
 }
 
-// LED alert patterns — single source of truth for relevance → LED colour.
-// Indexed by RelevanceLevel (REL_LOW=0, REL_MEDIUM=1, REL_HIGH=2).
-//   REL_HIGH   Red flash    (screen: red)
-//   REL_MEDIUM Amber flash  (screen: yellow)
-//   REL_LOW    Green flash  (screen: green)
-static const struct { bool r; bool g; } REL_LED[] = {
-    /*REL_LOW   */ {false, true },
-    /*REL_MEDIUM*/ {true,  true },
-    /*REL_HIGH  */ {true,  false},
-};
+// LED detection alert — red flash for any relevance level.
 void alertLED(RelevanceLevel rel){
-    const auto &p=REL_LED[rel];
-    if(p.r) digitalWrite(LED_R_PIN,HIGH);
-    if(p.g) digitalWrite(LED_G_PIN,HIGH);
+    (void)rel;
+    digitalWrite(LED_R_PIN,HIGH);
     delay(80);
     digitalWrite(LED_R_PIN,LOW);
-    digitalWrite(LED_G_PIN,LOW);
 }
 
 void processDetection(String macAddress, int8_t rssi, bool isBLE) {
@@ -936,15 +925,17 @@ void ScanTask(void *pvParameters) {
     for (;;) {
         if (config.setupComplete && (millis()-lastScanTime>=(unsigned long)scanInterval)) {
             scanning = true;
-            #if !GPS_ENABLED
-            digitalWrite(LED_G_PIN, HIGH);
-            #endif
-            if (config.enableBLE) scanBLE();
-            if (config.enableWiFi) scanWiFi();
+            if (config.enableBLE) {
+                digitalWrite(LED_B_PIN, HIGH);  // Blue = BLE scan
+                scanBLE();
+                digitalWrite(LED_B_PIN, LOW);
+            }
+            if (config.enableWiFi) {
+                digitalWrite(LED_G_PIN, HIGH);  // Green = WiFi scan
+                scanWiFi();
+                digitalWrite(LED_G_PIN, LOW);
+            }
             scanning = false;
-            #if !GPS_ENABLED
-            digitalWrite(LED_G_PIN, LOW);
-            #endif
             lastScanTime = millis();
         }
         #if GPS_ENABLED

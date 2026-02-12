@@ -406,19 +406,15 @@ void runCorrelationEngine() {
 // ALERT SYSTEM
 // ============================================================
 
-// LED alert patterns — single source of truth for priority → LED colour.
-// Indexed by priority level (0–5).  Tier 0/1 are silent.
-//   Tier 5  CRITICAL   Red rapid blink   (screen: red)
-//   Tier 4  HIGH       Red pulse         (screen: orange)
-//   Tier 3  MODERATE   Amber flash       (screen: yellow)
-//   Tier 2  LOW        Green flash       (screen: green)
-static const struct { bool red; bool green; uint16_t onMs; uint16_t offMs; uint8_t pulses; } LED_ALERT[] = {
-    /*0 unused */ {false, false,   0,  0, 0},
-    /*1 BASE   */ {false, false,   0,  0, 0},
-    /*2 LOW    */ {false, true,  100,  0, 1},
-    /*3 MOD    */ {true,  true,  100,  0, 1},
-    /*4 HIGH   */ {true,  false, 200,  0, 1},
-    /*5 CRIT   */ {true,  false,  50, 50, 5},
+// LED alert patterns — red flash only, scaled by severity.
+// Indexed by priority level (0–5).  Tier 0–2 are silent.
+static const struct { uint16_t onMs; uint16_t offMs; uint8_t pulses; } LED_ALERT[] = {
+    /*0 unused */ {  0,  0, 0},
+    /*1 BASE   */ {  0,  0, 0},
+    /*2 LOW    */ {  0,  0, 0},
+    /*3 MOD    */ {100,  0, 1},
+    /*4 HIGH   */ {200,  0, 1},
+    /*5 CRIT   */ { 50, 50, 5},
 };
 
 void alertLED(int priority) {
@@ -426,11 +422,9 @@ void alertLED(int priority) {
     const auto &a = LED_ALERT[idx];
     if (a.pulses == 0) return;
     for (uint8_t i = 0; i < a.pulses; i++) {
-        if (a.red)   digitalWrite(LED_PIN, HIGH);
-        if (a.green) digitalWrite(LED_G_PIN, HIGH);
+        digitalWrite(LED_PIN, HIGH);
         delay(a.onMs);
         digitalWrite(LED_PIN, LOW);
-        digitalWrite(LED_G_PIN, LOW);
         if (a.offMs && i < a.pulses - 1) delay(a.offMs);
     }
 }
@@ -481,11 +475,17 @@ void ScanTask(void *pvParameters) {
     for (;;) {
         if (config.setupComplete && millis() - lastScanTime >= (unsigned long)scanInterval) {
             scanning = true;
-            digitalWrite(LED_G_PIN, HIGH);  // Green = scanning
-            if (config.enableBLE) scanBLE();
-            if (config.enableWiFi) scanWiFi();
+            if (config.enableBLE) {
+                digitalWrite(LED_B_PIN, HIGH);  // Blue = BLE scan
+                scanBLE();
+                digitalWrite(LED_B_PIN, LOW);
+            }
+            if (config.enableWiFi) {
+                digitalWrite(LED_G_PIN, HIGH);  // Green = WiFi scan
+                scanWiFi();
+                digitalWrite(LED_G_PIN, LOW);
+            }
             scanning = false;
-            digitalWrite(LED_G_PIN, LOW);
             lastScanTime = millis();
 
             // Run correlation engine after each scan cycle
