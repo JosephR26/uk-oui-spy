@@ -2,8 +2,9 @@
 #define OUI_DATABASE_H
 
 #include <Arduino.h>
+#include <string>
 #include <vector>
-#include <map>
+#include <unordered_map>
 
 // Device categories
 enum DeviceCategory {
@@ -53,7 +54,7 @@ struct OUIEntry {
 
 // Global dynamic database and lookup table
 extern std::vector<OUIEntry> dynamicDatabase;
-extern std::map<String, OUIEntry*> ouiLookup;
+extern std::unordered_map<std::string, OUIEntry*> ouiLookup;
 
 // Helper functions
 const char* getCategoryName(DeviceCategory cat);

@@ -3,7 +3,7 @@
 #include <SD.h>
 
 std::vector<OUIEntry> dynamicDatabase;
-std::map<String, OUIEntry*> ouiLookup;
+std::unordered_map<std::string, OUIEntry*> ouiLookup;
 
 const char* getCategoryName(DeviceCategory cat) {
     switch(cat) {
@@ -72,7 +72,7 @@ uint16_t getRelevanceColor(RelevanceLevel rel) {
 void rebuildLookupTable() {
     ouiLookup.clear();
     for (auto& entry : dynamicDatabase) {
-        ouiLookup[entry.oui] = &entry;
+        ouiLookup[entry.oui.c_str()] = &entry;
     }
 }
 
