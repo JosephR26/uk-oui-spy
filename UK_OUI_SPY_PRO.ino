@@ -417,6 +417,25 @@ void scanWiFi(){
     #endif
 }
 
+// LED alert patterns — single source of truth for relevance → LED colour.
+// Indexed by RelevanceLevel (REL_LOW=0, REL_MEDIUM=1, REL_HIGH=2).
+//   REL_HIGH   Red flash    (screen: red)
+//   REL_MEDIUM Amber flash  (screen: yellow)
+//   REL_LOW    Green flash  (screen: green)
+static const struct { bool r; bool g; } REL_LED[] = {
+    /*REL_LOW   */ {false, true },
+    /*REL_MEDIUM*/ {true,  true },
+    /*REL_HIGH  */ {true,  false},
+};
+void alertLED(RelevanceLevel rel){
+    const auto &p=REL_LED[rel];
+    if(p.r) digitalWrite(LED_R_PIN,HIGH);
+    if(p.g) digitalWrite(LED_G_PIN,HIGH);
+    delay(80);
+    digitalWrite(LED_R_PIN,LOW);
+    digitalWrite(LED_G_PIN,LOW);
+}
+
 void processDetection(String macAddress, int8_t rssi, bool isBLE) {
     String mac=macAddress;mac.toUpperCase();
     String oui=mac.substring(0,8);
@@ -469,16 +488,7 @@ void processDetection(String macAddress, int8_t rssi, bool isBLE) {
             if(f){f.println(logLine);f.close();}
         }
     }
-    // Colour-coded LED alert matching on-screen relevance colours
-    if(det.relevance==REL_HIGH){
-        digitalWrite(LED_R_PIN,HIGH);delay(80);digitalWrite(LED_R_PIN,LOW);
-    }else if(det.relevance==REL_MEDIUM){
-        digitalWrite(LED_R_PIN,HIGH);digitalWrite(LED_G_PIN,HIGH);
-        delay(80);
-        digitalWrite(LED_R_PIN,LOW);digitalWrite(LED_G_PIN,LOW);
-    }else if(det.relevance==REL_LOW){
-        digitalWrite(LED_G_PIN,HIGH);delay(80);digitalWrite(LED_G_PIN,LOW);
-    }
+    alertLED(det.relevance);
 }
 
 // ============================================================================

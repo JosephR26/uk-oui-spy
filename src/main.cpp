@@ -406,34 +406,32 @@ void runCorrelationEngine() {
 // ALERT SYSTEM
 // ============================================================
 
+// LED alert patterns — single source of truth for priority → LED colour.
+// Indexed by priority level (0–5).  Tier 0/1 are silent.
+//   Tier 5  CRITICAL   Red rapid blink   (screen: red)
+//   Tier 4  HIGH       Red pulse         (screen: orange)
+//   Tier 3  MODERATE   Amber flash       (screen: yellow)
+//   Tier 2  LOW        Green flash       (screen: green)
+static const struct { bool red; bool green; uint16_t onMs; uint16_t offMs; uint8_t pulses; } LED_ALERT[] = {
+    /*0 unused */ {false, false,   0,  0, 0},
+    /*1 BASE   */ {false, false,   0,  0, 0},
+    /*2 LOW    */ {false, true,  100,  0, 1},
+    /*3 MOD    */ {true,  true,  100,  0, 1},
+    /*4 HIGH   */ {true,  false, 200,  0, 1},
+    /*5 CRIT   */ {true,  false,  50, 50, 5},
+};
+
 void alertLED(int priority) {
-    if (priority >= PRIORITY_CRITICAL) {
-        // Red rapid blink — matches Tier 5 (red) on screen
-        for (int i = 0; i < 5; i++) {
-            digitalWrite(LED_PIN, HIGH);
-            delay(50);
-            digitalWrite(LED_PIN, LOW);
-            delay(50);
-        }
-    } else if (priority >= PRIORITY_HIGH) {
-        // Amber pulse — matches Tier 4 (orange) on screen
-        digitalWrite(LED_PIN, HIGH);
-        digitalWrite(LED_G_PIN, HIGH);
-        delay(200);
+    int idx = constrain(priority, 0, 5);
+    const auto &a = LED_ALERT[idx];
+    if (a.pulses == 0) return;
+    for (uint8_t i = 0; i < a.pulses; i++) {
+        if (a.red)   digitalWrite(LED_PIN, HIGH);
+        if (a.green) digitalWrite(LED_G_PIN, HIGH);
+        delay(a.onMs);
         digitalWrite(LED_PIN, LOW);
         digitalWrite(LED_G_PIN, LOW);
-    } else if (priority >= PRIORITY_MODERATE) {
-        // Yellow flash — matches Tier 3 (yellow) on screen
-        digitalWrite(LED_PIN, HIGH);
-        digitalWrite(LED_G_PIN, HIGH);
-        delay(100);
-        digitalWrite(LED_PIN, LOW);
-        digitalWrite(LED_G_PIN, LOW);
-    } else if (priority >= PRIORITY_LOW) {
-        // Green flash — matches Tier 2 (green) on screen
-        digitalWrite(LED_G_PIN, HIGH);
-        delay(100);
-        digitalWrite(LED_G_PIN, LOW);
+        if (a.offMs && i < a.pulses - 1) delay(a.offMs);
     }
 }
 
