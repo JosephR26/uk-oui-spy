@@ -3,7 +3,7 @@
 #include <SD.h>
 
 std::vector<OUIEntry> dynamicDatabase;
-std::unordered_map<String, OUIEntry*> ouiLookup;
+std::map<String, OUIEntry*> ouiLookup;
 
 const char* getCategoryName(DeviceCategory cat) {
     switch(cat) {
