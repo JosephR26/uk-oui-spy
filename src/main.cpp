@@ -408,7 +408,7 @@ void runCorrelationEngine() {
 
 void alertLED(int priority) {
     if (priority >= PRIORITY_CRITICAL) {
-        // Fast red blink
+        // Red rapid blink — matches Tier 5 (red) on screen
         for (int i = 0; i < 5; i++) {
             digitalWrite(LED_PIN, HIGH);
             delay(50);
@@ -416,12 +416,21 @@ void alertLED(int priority) {
             delay(50);
         }
     } else if (priority >= PRIORITY_HIGH) {
-        // Red pulse
+        // Amber pulse — matches Tier 4 (orange) on screen
         digitalWrite(LED_PIN, HIGH);
+        digitalWrite(LED_G_PIN, HIGH);
         delay(200);
         digitalWrite(LED_PIN, LOW);
+        digitalWrite(LED_G_PIN, LOW);
     } else if (priority >= PRIORITY_MODERATE) {
-        // Brief green flash
+        // Yellow flash — matches Tier 3 (yellow) on screen
+        digitalWrite(LED_PIN, HIGH);
+        digitalWrite(LED_G_PIN, HIGH);
+        delay(100);
+        digitalWrite(LED_PIN, LOW);
+        digitalWrite(LED_G_PIN, LOW);
+    } else if (priority >= PRIORITY_LOW) {
+        // Green flash — matches Tier 2 (green) on screen
         digitalWrite(LED_G_PIN, HIGH);
         delay(100);
         digitalWrite(LED_G_PIN, LOW);
