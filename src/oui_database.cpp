@@ -71,8 +71,9 @@ uint16_t getRelevanceColor(RelevanceLevel rel) {
 
 void rebuildLookupTable() {
     ouiLookup.clear();
+    ouiLookup.reserve(dynamicDatabase.size());
     for (auto& entry : dynamicDatabase) {
-        ouiLookup[entry.oui.c_str()] = &entry;
+        ouiLookup[toOuiKey(entry.oui)] = &entry;
     }
 }
 
