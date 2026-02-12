@@ -33,11 +33,24 @@
 // ============================================================
 
 // CST820 capacitive touch controller (I2C)
-// 2-USB CYD variant: SDA=33, SCL=32, RST=25, INT=21 (shared with backlight)
 #define TOUCH_ADDR  0x15
-#define TOUCH_SDA   33
-#define TOUCH_SCL   32
-#define TOUCH_RST   25
+
+#ifdef BOARD_CYD_2USB
+// 2-USB CYD variant: SDA=33, SCL=32
+// GPIO 25 serves double duty as both the buzzer output and the CST820 touch
+// controller reset line. Because tone() on this pin would reset the touch
+// controller, the buzzer is disabled for this variant (see alertBuzzer()).
+#define TOUCH_SDA       33
+#define TOUCH_SCL       32
+#define GPIO_SHARED_25  25      // physical pin shared between buzzer & touch RST
+#define TOUCH_RST       GPIO_SHARED_25
+#define BUZZER_PIN      GPIO_SHARED_25
+#else
+// Default / original CYD variant (resistive touch, dedicated buzzer pin)
+#define TOUCH_SDA   27
+#define TOUCH_SCL   22
+#define BUZZER_PIN  25
+#endif
 
 // Backlight polarity (derived from platformio.ini)
 #ifndef TFT_BACKLIGHT_ON
@@ -50,7 +63,6 @@
 #endif
 
 #define SD_CS 5
-#define BUZZER_PIN 25
 #define LED_PIN 4
 #define LED_G_PIN 16
 #define LED_B_PIN 17
@@ -404,10 +416,20 @@ void runCorrelationEngine() {
 // ============================================================
 
 void alertBuzzer(int priority) {
-    // GPIO 25 is shared between BUZZER_PIN and CST820 TOUCH_RST.
-    // Using tone() on this pin will reset the touch controller,
-    // so buzzer is disabled. Use LED alerts instead.
+#ifdef BOARD_CYD_2USB
+    // GPIO 25 is shared between BUZZER_PIN and CST820 TOUCH_RST on the
+    // 2-USB variant. Using tone() here would reset the touch controller,
+    // so buzzer is disabled; LED alerts are used instead.
     (void)priority;
+#else
+    if (priority >= PRIORITY_CRITICAL) {
+        tone(BUZZER_PIN, 2500, 150);
+    } else if (priority >= PRIORITY_HIGH) {
+        tone(BUZZER_PIN, 2000, 100);
+    } else if (priority >= PRIORITY_MODERATE) {
+        tone(BUZZER_PIN, 1500, 80);
+    }
+#endif
 }
 
 void alertLED(int priority) {
@@ -554,12 +576,14 @@ void setup() {
     pinMode(BAT_ADC, INPUT);
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
 
-    // CST820 reset sequence (RST pin shared with BUZZER_PIN)
+#ifdef BOARD_CYD_2USB
+    // CST820 reset sequence (RST is GPIO_SHARED_25, also aliased as BUZZER_PIN)
     pinMode(TOUCH_RST, OUTPUT);
     digitalWrite(TOUCH_RST, LOW);
     delay(10);
     digitalWrite(TOUCH_RST, HIGH);
     delay(50);
+#endif
 
     // Touch controller I2C init
     Wire.begin(TOUCH_SDA, TOUCH_SCL);

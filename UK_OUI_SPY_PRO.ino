@@ -110,6 +110,9 @@
 #define TOUCH_SCL    22
 #define TFT_BL       21
 #define SD_CS        5
+// On the 2-USB CYD variant (BOARD_CYD_2USB) GPIO 25 is shared with the CST820
+// touch controller reset line. The buzzer is disabled via #ifndef guard in that
+// variant to avoid resetting the touch controller.
 #define BUZZER_PIN   25
 #define LED_R_PIN    4
 #define LED_G_PIN    16
@@ -461,7 +464,9 @@ void processDetection(String macAddress, int8_t rssi, bool isBLE) {
         }
     }
     if(det.relevance==REL_HIGH){
+#ifndef BOARD_CYD_2USB
         tone(BUZZER_PIN,2000,100);
+#endif
         digitalWrite(LED_R_PIN,HIGH);delay(80);digitalWrite(LED_R_PIN,LOW);
     }
 }
