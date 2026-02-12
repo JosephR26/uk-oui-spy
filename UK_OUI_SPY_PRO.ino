@@ -417,9 +417,8 @@ void scanWiFi(){
     #endif
 }
 
-// LED detection alert — red flash for any relevance level.
-void alertLED(RelevanceLevel rel){
-    (void)rel;
+// LED detection alert — red flash for any detection.
+void alertLED(){
     digitalWrite(LED_R_PIN,HIGH);
     delay(80);
     digitalWrite(LED_R_PIN,LOW);
@@ -477,7 +476,7 @@ void processDetection(String macAddress, int8_t rssi, bool isBLE) {
             if(f){f.println(logLine);f.close();}
         }
     }
-    alertLED(det.relevance);
+    alertLED();
 }
 
 // ============================================================================
@@ -931,9 +930,13 @@ void ScanTask(void *pvParameters) {
                 digitalWrite(LED_B_PIN, LOW);
             }
             if (config.enableWiFi) {
+                #if !GPS_ENABLED
                 digitalWrite(LED_G_PIN, HIGH);  // Green = WiFi scan
+                #endif
                 scanWiFi();
+                #if !GPS_ENABLED
                 digitalWrite(LED_G_PIN, LOW);
+                #endif
             }
             scanning = false;
             lastScanTime = millis();

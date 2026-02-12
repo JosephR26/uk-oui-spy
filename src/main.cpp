@@ -407,14 +407,14 @@ void runCorrelationEngine() {
 // ============================================================
 
 // LED alert patterns — red flash only, scaled by severity.
-// Indexed by priority level (0–5).  Tier 0–2 are silent.
+// Indices must match PRIORITY_* constants (1–5).  Tiers below MODERATE are silent.
 static const struct { uint16_t onMs; uint16_t offMs; uint8_t pulses; } LED_ALERT[] = {
-    /*0 unused */ {  0,  0, 0},
-    /*1 BASE   */ {  0,  0, 0},
-    /*2 LOW    */ {  0,  0, 0},
-    /*3 MOD    */ {100,  0, 1},
-    /*4 HIGH   */ {200,  0, 1},
-    /*5 CRIT   */ { 50, 50, 5},
+    [0]                  = {  0,  0, 0},
+    [PRIORITY_BASELINE]  = {  0,  0, 0},
+    [PRIORITY_LOW]       = {  0,  0, 0},
+    [PRIORITY_MODERATE]  = {100,  0, 1},
+    [PRIORITY_HIGH]      = {200,  0, 1},
+    [PRIORITY_CRITICAL]  = { 50, 50, 5},
 };
 
 void alertLED(int priority) {
