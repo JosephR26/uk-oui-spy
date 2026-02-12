@@ -33,9 +33,11 @@
 // ============================================================
 
 // CST820 capacitive touch controller (I2C)
+// 2-USB CYD variant: SDA=33, SCL=32, RST=25, INT=21 (shared with backlight)
 #define TOUCH_ADDR  0x15
-#define TOUCH_SDA   27
-#define TOUCH_SCL   22
+#define TOUCH_SDA   33
+#define TOUCH_SCL   32
+#define TOUCH_RST   25
 
 // Backlight polarity (derived from platformio.ini)
 #ifndef TFT_BACKLIGHT_ON
@@ -402,24 +404,10 @@ void runCorrelationEngine() {
 // ============================================================
 
 void alertBuzzer(int priority) {
-    if (config.alertMode == ALERT_SILENT) return;
-    if (priority >= PRIORITY_CRITICAL) {
-        // Triple rapid beep for critical
-        for (int i = 0; i < 3; i++) {
-            tone(BUZZER_PIN, 2800, 80);
-            delay(120);
-        }
-    } else if (priority >= PRIORITY_HIGH) {
-        // Double beep for high
-        for (int i = 0; i < 2; i++) {
-            tone(BUZZER_PIN, 2200, 100);
-            delay(150);
-        }
-    } else if (priority >= PRIORITY_MODERATE) {
-        // Single short beep for moderate
-        tone(BUZZER_PIN, 1600, 80);
-    }
-    // No buzzer for LOW or BASELINE
+    // GPIO 25 is shared between BUZZER_PIN and CST820 TOUCH_RST.
+    // Using tone() on this pin will reset the touch controller,
+    // so buzzer is disabled. Use LED alerts instead.
+    (void)priority;
 }
 
 void alertLED(int priority) {
@@ -566,10 +554,22 @@ void setup() {
     pinMode(BAT_ADC, INPUT);
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
 
-    // Touch controller
+    // CST820 reset sequence (RST pin shared with BUZZER_PIN)
+    pinMode(TOUCH_RST, OUTPUT);
+    digitalWrite(TOUCH_RST, LOW);
+    delay(10);
+    digitalWrite(TOUCH_RST, HIGH);
+    delay(50);
+
+    // Touch controller I2C init
     Wire.begin(TOUCH_SDA, TOUCH_SCL);
     Wire.beginTransmission(TOUCH_ADDR);
-    if (Wire.endTransmission() == 0) i2cAvailable = true;
+    if (Wire.endTransmission() == 0) {
+        i2cAvailable = true;
+        Serial.println("CST820 touch found at 0x15");
+    } else {
+        Serial.println("CST820 touch NOT found - check wiring");
+    }
 
     initDisplay();
     loadConfig();
