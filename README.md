@@ -1,4 +1,4 @@
-# UK-OUI-SPY PRO - v3.1.0
+# UK-OUI-SPY PRO
 
 **Professional UK Surveillance Device Detector**
 
