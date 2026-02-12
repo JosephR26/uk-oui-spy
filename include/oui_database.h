@@ -56,6 +56,9 @@ struct OUIEntry {
 extern std::vector<OUIEntry> dynamicDatabase;
 extern std::unordered_map<std::string, OUIEntry*> ouiLookup;
 
+// Convert Arduino String to std::string key for ouiLookup
+inline std::string toOuiKey(const String& s) { return std::string(s.c_str(), s.length()); }
+
 // Helper functions
 const char* getCategoryName(DeviceCategory cat);
 const char* getRelevanceName(RelevanceLevel rel);

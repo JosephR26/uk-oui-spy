@@ -623,7 +623,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
     String oui = mac.substring(0, 8);
 
     // Check OUI database first
-    auto ouiIt = ouiLookup.find(oui.c_str());
+    auto ouiIt = ouiLookup.find(toOuiKey(oui));
     if (ouiIt == ouiLookup.end()) return;  // Not a known surveillance OUI
 
     // Build detection
