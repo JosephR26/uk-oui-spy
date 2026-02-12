@@ -16,7 +16,7 @@ This project, including its firmware and hardware designs, is licensed under the
 
 **MIT License**
 
-Copyright (c) 2026 [Your Company Name]
+Copyright (c) 2026 JosephR26
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
