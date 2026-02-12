@@ -106,14 +106,26 @@
 //  HARDWARE PIN DEFINITIONS (ESP32-2432S028)
 // ============================================================================
 #define TOUCH_ADDR   0x15
-#define TOUCH_SDA    27
-#define TOUCH_SCL    22
 #define TFT_BL       21
 #define SD_CS        5
-// On the 2-USB CYD variant (BOARD_CYD_2USB) GPIO 25 is shared with the CST820
-// touch controller reset line. The buzzer is disabled via #ifndef guard in that
-// variant to avoid resetting the touch controller.
+
+#ifdef BOARD_CYD_2USB
+// 2-USB CYD variant: SDA=33, SCL=32
+// GPIO 25 serves double duty as both the buzzer output and the CST820 touch
+// controller reset line.  Because tone() on this pin would reset the touch
+// controller, the buzzer is disabled for this variant (see buzzerAlert()).
+#define TOUCH_SDA       33
+#define TOUCH_SCL       32
+#define GPIO_SHARED_25  25      // physical pin shared between buzzer & touch RST
+#define TOUCH_RST       GPIO_SHARED_25
+#define BUZZER_PIN      GPIO_SHARED_25
+#else
+// Default / original CYD variant (resistive touch, dedicated buzzer pin)
+#define TOUCH_SDA    27
+#define TOUCH_SCL    22
 #define BUZZER_PIN   25
+#endif
+
 #define LED_R_PIN    4
 #define LED_G_PIN    16
 #define LED_B_PIN    17
@@ -411,6 +423,22 @@ void scanWiFi(){
     #endif
 }
 
+// ============================================================================
+//  BUZZER ALERT (board-aware)
+//  Single point of control for all buzzer calls — keeps board-specific
+//  suppression logic in one place so it can't drift out of sync.
+// ============================================================================
+void buzzerAlert(RelevanceLevel relevance) {
+#ifdef BOARD_CYD_2USB
+    // GPIO 25 is shared with CST820 TOUCH_RST on this variant; buzzer disabled.
+    (void)relevance;
+#else
+    if (relevance == REL_HIGH) {
+        tone(BUZZER_PIN, 2000, 100);
+    }
+#endif
+}
+
 void processDetection(String macAddress, int8_t rssi, bool isBLE) {
     String mac=macAddress;mac.toUpperCase();
     String oui=mac.substring(0,8);
@@ -464,9 +492,7 @@ void processDetection(String macAddress, int8_t rssi, bool isBLE) {
         }
     }
     if(det.relevance==REL_HIGH){
-#ifndef BOARD_CYD_2USB
-        tone(BUZZER_PIN,2000,100);
-#endif
+        buzzerAlert(det.relevance);
         digitalWrite(LED_R_PIN,HIGH);delay(80);digitalWrite(LED_R_PIN,LOW);
     }
 }
