@@ -417,6 +417,14 @@ void scanWiFi(){
     #endif
 }
 
+// LED detection alert — red flash for any relevance level.
+void alertLED(RelevanceLevel rel){
+    (void)rel;
+    digitalWrite(LED_R_PIN,HIGH);
+    delay(80);
+    digitalWrite(LED_R_PIN,LOW);
+}
+
 void processDetection(String macAddress, int8_t rssi, bool isBLE) {
     String mac=macAddress;mac.toUpperCase();
     String oui=mac.substring(0,8);
@@ -469,16 +477,7 @@ void processDetection(String macAddress, int8_t rssi, bool isBLE) {
             if(f){f.println(logLine);f.close();}
         }
     }
-    // Colour-coded LED alert matching on-screen relevance colours
-    if(det.relevance==REL_HIGH){
-        digitalWrite(LED_R_PIN,HIGH);delay(80);digitalWrite(LED_R_PIN,LOW);
-    }else if(det.relevance==REL_MEDIUM){
-        digitalWrite(LED_R_PIN,HIGH);digitalWrite(LED_G_PIN,HIGH);
-        delay(80);
-        digitalWrite(LED_R_PIN,LOW);digitalWrite(LED_G_PIN,LOW);
-    }else if(det.relevance==REL_LOW){
-        digitalWrite(LED_G_PIN,HIGH);delay(80);digitalWrite(LED_G_PIN,LOW);
-    }
+    alertLED(det.relevance);
 }
 
 // ============================================================================
@@ -926,15 +925,17 @@ void ScanTask(void *pvParameters) {
     for (;;) {
         if (config.setupComplete && (millis()-lastScanTime>=(unsigned long)scanInterval)) {
             scanning = true;
-            #if !GPS_ENABLED
-            digitalWrite(LED_G_PIN, HIGH);
-            #endif
-            if (config.enableBLE) scanBLE();
-            if (config.enableWiFi) scanWiFi();
+            if (config.enableBLE) {
+                digitalWrite(LED_B_PIN, HIGH);  // Blue = BLE scan
+                scanBLE();
+                digitalWrite(LED_B_PIN, LOW);
+            }
+            if (config.enableWiFi) {
+                digitalWrite(LED_G_PIN, HIGH);  // Green = WiFi scan
+                scanWiFi();
+                digitalWrite(LED_G_PIN, LOW);
+            }
             scanning = false;
-            #if !GPS_ENABLED
-            digitalWrite(LED_G_PIN, LOW);
-            #endif
             lastScanTime = millis();
         }
         #if GPS_ENABLED
