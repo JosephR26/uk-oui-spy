@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 #include <vector>
-#include <unordered_map>
+#include <map>
 
 // Device categories
 enum DeviceCategory {
@@ -53,7 +53,7 @@ struct OUIEntry {
 
 // Global dynamic database and lookup table
 extern std::vector<OUIEntry> dynamicDatabase;
-extern std::unordered_map<String, OUIEntry*> ouiLookup;
+extern std::map<String, OUIEntry*> ouiLookup;
 
 // Helper functions
 const char* getCategoryName(DeviceCategory cat);
