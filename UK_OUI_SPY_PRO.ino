@@ -469,8 +469,15 @@ void processDetection(String macAddress, int8_t rssi, bool isBLE) {
             if(f){f.println(logLine);f.close();}
         }
     }
+    // Colour-coded LED alert matching on-screen relevance colours
     if(det.relevance==REL_HIGH){
         digitalWrite(LED_R_PIN,HIGH);delay(80);digitalWrite(LED_R_PIN,LOW);
+    }else if(det.relevance==REL_MEDIUM){
+        digitalWrite(LED_R_PIN,HIGH);digitalWrite(LED_G_PIN,HIGH);
+        delay(80);
+        digitalWrite(LED_R_PIN,LOW);digitalWrite(LED_G_PIN,LOW);
+    }else if(det.relevance==REL_LOW){
+        digitalWrite(LED_G_PIN,HIGH);delay(80);digitalWrite(LED_G_PIN,LOW);
     }
 }
 
