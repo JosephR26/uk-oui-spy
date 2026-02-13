@@ -16,7 +16,7 @@
 #include <WiFi.h>
 #include <SD.h>
 #include <SPI.h>
-#include <Wire.h>
+// Wire.h removed — XPT2046 touch uses SPI (handled by TFT_eSPI)
 #include <vector>
 #include <algorithm>
 #include <map>
@@ -32,19 +32,10 @@
 // HARDWARE PIN DEFINITIONS
 // ============================================================
 
-// CST820 capacitive touch controller (I2C)
-#define TOUCH_ADDR  0x15
-
-#ifdef BOARD_CYD_2USB
-// 2-USB CYD variant: capacitive touch (CST820), SDA=33, SCL=32, RST=GPIO 25
-#define TOUCH_SDA   33
-#define TOUCH_SCL   32
-#define TOUCH_RST   25
-#else
-// Default / original CYD variant (resistive touch)
-#define TOUCH_SDA   27
-#define TOUCH_SCL   22
-#endif
+// XPT2046 resistive touch (SPI, handled by TFT_eSPI)
+// TOUCH_CS defined in platformio.ini build flags (GPIO 33)
+// Calibration data: {x_min, x_max, y_min, y_max, rotation}
+uint16_t touchCalData[5] = {300, 3600, 300, 3600, 1};
 
 // Backlight polarity (derived from platformio.ini)
 #ifndef TFT_BACKLIGHT_ON
@@ -518,26 +509,18 @@ void UITask(void *pvParameters) {
 }
 
 // ============================================================
-// TOUCH DRIVER (CST820)
+// TOUCH DRIVER (XPT2046 via TFT_eSPI)
 // ============================================================
 
-bool readCapacitiveTouch(uint16_t *x, uint16_t *y) {
-    if (!i2cAvailable) return false;
-    Wire.beginTransmission(TOUCH_ADDR);
-    Wire.write(0x00);
-    if (Wire.endTransmission() != 0) return false;
-    if (Wire.requestFrom(TOUCH_ADDR, 6) != 6) return false;
-    Wire.read(); // Status
-    if ((Wire.read() & 0x0F) == 0) return false;
-    uint8_t xH = Wire.read(); uint8_t xL = Wire.read();
-    uint8_t yH = Wire.read(); uint8_t yL = Wire.read();
-    uint16_t rawX = ((xH & 0x0F) << 8) | xL;
-    uint16_t rawY = ((yH & 0x0F) << 8) | yL;
-    // Landscape rotation mapping
-    *x = rawY;
-    *y = 239 - rawX;
-    lastInteractionTime = millis();
-    return true;
+bool readTouch(uint16_t *x, uint16_t *y) {
+    uint16_t tx, ty;
+    if (tft.getTouch(&tx, &ty)) {
+        *x = tx;
+        *y = ty;
+        lastInteractionTime = millis();
+        return true;
+    }
+    return false;
 }
 
 // ============================================================
@@ -557,26 +540,12 @@ void setup() {
     pinMode(BAT_ADC, INPUT);
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
 
-#ifdef BOARD_CYD_2USB
-    // CST820 reset sequence
-    pinMode(TOUCH_RST, OUTPUT);
-    digitalWrite(TOUCH_RST, LOW);
-    delay(10);
-    digitalWrite(TOUCH_RST, HIGH);
-    delay(50);
-#endif
-
-    // Touch controller I2C init
-    Wire.begin(TOUCH_SDA, TOUCH_SCL);
-    Wire.beginTransmission(TOUCH_ADDR);
-    if (Wire.endTransmission() == 0) {
-        i2cAvailable = true;
-        Serial.println("CST820 touch found at 0x15");
-    } else {
-        Serial.println("CST820 touch NOT found - check wiring");
-    }
-
     initDisplay();
+
+    // XPT2046 touch calibration
+    tft.setTouch(touchCalData);
+    Serial.println("XPT2046 touch initialized (SPI, CS=GPIO 33)");
+    i2cAvailable = true;  // Flag reused for "touch available"
     loadConfig();
     currentScreen = config.setupComplete ? SCREEN_MAIN : SCREEN_WIZARD;
 
@@ -1088,7 +1057,7 @@ void drawWizardScreen() {
 void handleTouchGestures() {
     static unsigned long lastTouch = 0;
     uint16_t x, y;
-    if (!readCapacitiveTouch(&x, &y)) return;
+    if (!readTouch(&x, &y)) return;
     if (millis() - lastTouch < 250) return;  // Debounce
     lastTouch = millis();
 

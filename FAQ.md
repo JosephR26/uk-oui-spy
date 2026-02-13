@@ -1,64 +1,83 @@
 # FAQ & Troubleshooting
 
-## Frequently Asked Questions
+## General
 
-**Q: What is the UK-OUI-SPY PRO?**
+**Q: What is UK-OUI-SPY PRO?**
 
-A: It is a specialized device that detects nearby surveillance equipment (like CCTV, ANPR, and drones) by identifying the unique manufacturer codes (OUIs) in their Wi-Fi and Bluetooth signals.
+A: An open-source, portable device that detects nearby surveillance equipment (CCTV, ANPR, drones, body cameras, etc.) by identifying manufacturer codes (OUIs) in their Wi-Fi and Bluetooth signals. Built on the ESP32 platform with a 2.8" touchscreen.
 
-**Q: Is this device legal to own and use in the UK?**
+**Q: Is this legal in the UK?**
 
-A: Yes. The device operates by passively listening to publicly broadcast signals, which is legal in the UK. It does not intercept, record, or decrypt any content. However, you are responsible for using the device ethically and in compliance with all local laws. See the full legal disclaimer.
+A: Yes. The device passively listens to publicly broadcast signals, which is legal under the UK Wireless Telegraphy Act. It does not intercept, record, or decrypt any content. You are responsible for using it ethically and in compliance with all local laws. See [LEGAL.md](LEGAL.md) for the full disclaimer.
 
-**Q: Why can't I see a device that I know is there?**
+**Q: What can't it detect?**
 
-A: There are several possibilities:
-1.  The device may not be actively broadcasting Wi-Fi or Bluetooth signals.
-2.  It may be using a wired connection (Ethernet).
-3.  It may be using MAC address randomization, a technique that makes it harder to track.
-4.  Its OUI may not yet be in our database. Please help us by reporting new devices!
+A: Devices that don't broadcast Wi-Fi or Bluetooth (analog CCTV, wired-only cameras), devices with radios disabled or in sleep mode, and devices using MAC address randomisation.
 
-**Q: How often should I update the `oui.csv` and `priority.json` files?**
+**Q: How often should I update the OUI database?**
 
-A: We recommend updating them monthly. New devices and manufacturers appear regularly, and an up-to-date database is key to the device's effectiveness.
+A: Check the repository monthly for updated `oui.csv` and `priority.json` files. New devices and manufacturers appear regularly.
 
-**Q: What is the battery life?**
+**Q: What battery life can I expect?**
 
-A: A full charge typically provides 4-6 hours of continuous operation. The device will automatically enter a deep sleep mode after a period of inactivity to conserve power. You can wake it by tapping the screen.
+A: With a 1000mAh LiPo in normal scan mode: 2-3 hours. With deep sleep enabled: 24+ hours. Powered via USB, runtime is unlimited.
 
-**Q: Can I use the device while it is charging?**
+**Q: Can I use it while charging?**
 
-A: Yes, the device is fully functional while connected to a USB power source.
+A: Yes, the device works normally while connected to USB power.
 
-## Troubleshooting Guide
+## Hardware
 
-**Problem: The device won't turn on.**
+**Q: Which ESP32 board do I need?**
 
-*   **Solution**: The battery is likely depleted. Charge the device for at least 30 minutes using the provided USB-C cable.
+A: The **ESP32-2432S028** (CYD) with **XPT2046 resistive touch** (SPI). There are several CYD variants -- check that your board has the XPT2046 chip (16-pin TSSOP) rather than a capacitive touch controller (CST820/FT6236).
 
-**Problem: The screen is black or unresponsive.**
+**Q: My touch screen doesn't respond. What's wrong?**
 
-*   **Solution 1**: The device may be in deep sleep mode. Tap the screen firmly to wake it.
-*   **Solution 2**: Perform a hard reset by pressing and holding the power button for 10 seconds.
+A: Most likely your board has a different touch controller. This firmware is built for XPT2046 (resistive, SPI). Boards with capacitive touch (CST820 or FT6236 on I2C) require firmware modifications. Check the chip markings on your PCB.
 
-**Problem: The Setup Wizard shows "SD Card: N/A" or "Touch: FAIL".**
+**Q: What SD card should I use?**
 
-*   **SD Card**: Ensure the microSD card is formatted as FAT32 and is inserted correctly. Try a different brand of SD card if the problem persists.
-*   **Touch**: This may indicate a hardware issue. Please contact customer support.
+A: Any microSD card from 4GB to 32GB, formatted as FAT32. Class 10 recommended. Cards larger than 32GB may need manual FAT32 formatting.
 
-**Problem: The Web Portal (`http://192.168.4.1`) won't load.**
+## Troubleshooting
 
-*   **Solution 1**: Ensure you are connected to the "OUI-SPY-PRO" Wi-Fi network and have entered the correct password (`spypro2026`).
-*   **Solution 2**: On your phone, disable your mobile data temporarily. Some phones will try to use mobile data if the Wi-Fi network doesn't have an internet connection.
-*   **Solution 3**: Make sure the Web Portal is enabled in the on-device Settings (CFG) page.
+**Problem: The screen is blank or unresponsive.**
 
-**Problem: I can't download the log file from the web portal.**
+- Check USB power (try a different cable or power source)
+- Press the reset button on the board
+- If the screen was working before, re-flash the firmware
 
-*   **Solution**: Ensure an SD card is inserted and that the device has logged at least one detection. The `detections.csv` file is created only after the first detection is logged.
+**Problem: Setup Wizard shows "SD Card: N/A".**
+
+- Ensure the card is formatted as FAT32 and inserted fully
+- Try a different SD card brand
+- Check that GPIO 5 is not shorted
+
+**Problem: Setup Wizard shows "Touch: FAIL".**
+
+- Verify your board uses XPT2046 (check the 16-pin chip)
+- If you have a capacitive touch board, the firmware needs modification
+
+**Problem: The Web Portal won't load.**
+
+- Confirm you're connected to the "OUI-SPY-PRO" Wi-Fi network (password: `spypro2026`)
+- Disable mobile data on your phone temporarily
+- Check that the Web Portal is enabled in the CFG screen
+
+**Problem: No detections showing.**
+
+- Walk near known CCTV cameras or surveillance equipment
+- Ensure BLE and Wi-Fi scanning are both enabled in settings
+- Some devices use MAC randomisation and won't be detected
+- Their OUI may not be in the database yet -- report it as an issue
+
+**Problem: Device keeps resetting.**
+
+- Use a USB power source capable of 2A
+- If on battery, check voltage is above 3.5V
+- Reduce scan frequency in settings
 
 ---
 
-**Contact Support**
-
-If you are still experiencing issues, please contact our support team at:
-**support@your-company.com** (Replace with your actual support email)
+**Still need help?** Open an issue on GitHub: https://github.com/JosephR26/uk-oui-spy/issues
