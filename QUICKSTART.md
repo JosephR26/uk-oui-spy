@@ -1,130 +1,92 @@
-# Quick Start Guide - UK-OUI-SPY ESP32 v6
+# Quick Start Guide
 
-Get up and running in 5 minutes!
+Get up and running in 5 minutes.
 
-## Step 1: Install PlatformIO
+## What You Need
 
-**Option A - VS Code (Recommended)**
-1. Install [VS Code](https://code.visualstudio.com/)
-2. Install PlatformIO IDE extension from marketplace
-3. Restart VS Code
+- **ESP32-2432S028** board (CYD with XPT2046 resistive touch)
+- **MicroSD card** (4-32GB, FAT32)
+- **USB cable** (Micro-USB or USB-C, depending on your board variant)
+- **PlatformIO** or **Arduino IDE** installed on your computer
 
-**Option B - Command Line**
-```bash
-pip install platformio
-```
+## Step 1: Clone & Build
 
-## Step 2: Clone & Build
+**PlatformIO (recommended):**
 
 ```bash
-# Clone repository
-git clone https://github.com/yourusername/uk-oui-spy.git
+git clone https://github.com/JosephR26/uk-oui-spy.git
 cd uk-oui-spy
-
-# Build firmware
 pio run
-
-# You should see: "SUCCESS" at the end
 ```
 
-## Step 3: Upload to ESP32
+**Arduino IDE:**
+
+1. Install ESP32 board support
+2. Install libraries: `TFT_eSPI`, `NimBLE-Arduino`, `ArduinoJson`
+3. Open `UK_OUI_SPY_PRO.ino`
+4. Select board: ESP32 Dev Module
+5. Click Upload
+
+## Step 2: Prepare SD Card
+
+1. Format a microSD card as **FAT32**
+2. Copy `examples/oui.csv` and `examples/priority.json` to the card root
+3. Insert the card into the board's SD slot
+
+## Step 3: Flash & Boot
 
 ```bash
-# Connect ESP32-2432S028 via USB
-# Auto-detect and upload
 pio run --target upload
-
-# If upload fails, hold BOOT button and try again
 ```
 
-## Step 4: First Use
+If upload fails, hold the **BOOT** button on the board while uploading.
 
-1. **Optional**: Insert formatted microSD card (FAT32)
-2. Power on device (USB or battery)
-3. Wait 3 seconds for initialization
-4. Device starts scanning automatically!
+On first boot, the **Setup Wizard** checks your hardware (touch, SD card, battery). Tap **NEXT** then **GO** to proceed.
 
-## What You'll See
+## Step 4: Start Scanning
 
-```
-┌─────────────────────────────────┐
-│ UK-OUI-SPY        SCAN  SD  0   │  ← Status
-│ Mode: NORMAL                     │
-├─────────────────────────────────┤
-│ [Detection list appears here]   │
-│                                  │
-│ Scanning for devices...          │
-└─────────────────────────────────┘
-```
+The device begins scanning automatically. You'll see detections appear on screen as colour-coded cards:
 
-## First Detection
+- **Red** = High relevance (police/government equipment)
+- **Orange** = Surveillance infrastructure
+- **Yellow** = Medium relevance (traffic, council)
+- **Green** = Low relevance (consumer devices)
 
-When a surveillance device is detected:
+Use the **navigation bar** at the bottom to switch between screens (LIST, RADAR, GRAPH, HIST, MAP, CFG, INFO).
 
-```
-┌─────────────────────────────────┐
-│ UK-OUI-SPY        SCAN  SD  1   │
-│ Mode: NORMAL                     │
-├─────────────────────────────────┤
-│ ┃ Hikvision                      │  ← Manufacturer
-│ ┃ CCTV | RSSI:-65                │  ← Category & signal
-│ ┃ A4:DA:32:XX:XX:XX [BLE]        │  ← MAC & type
-│ ┃ UK Police/Council CCTV         │  ← Notes
-└─────────────────────────────────┘
-```
+## Step 5: Web Portal (Optional)
 
-- **Red bar** = High relevance (police/gov)
-- **RSSI** = Signal strength (-30 to -100)
-- **Beep** = Proximity alert (if buzzer connected)
+For a larger dashboard, connect your phone or laptop:
 
-## Basic Controls
-
-- **Tap top of screen** → Change scan mode (QUICK/NORMAL/POWER-SAVE)
-- **Leave running** → Auto-logs to SD card
+1. Connect to Wi-Fi: **OUI-SPY-PRO**
+2. Password: **spypro2026**
+3. Open browser: **http://192.168.4.1**
 
 ## Checking Logs
 
-1. Power off device
-2. Remove microSD card
-3. Insert into computer
-4. Open `detections.csv` in Excel/LibreOffice
+Detection data is logged to `detections.csv` on the SD card. You can:
 
-Or use the analysis tool:
-
-```bash
-pip install pandas
-python analysis/analyze_detections.py /path/to/detections.csv
-```
+- Open it directly in Excel or LibreOffice
+- Run the analysis script: `python analysis/analyze_detections.py detections.csv`
+- Use the web viewer: open `visualization/detections_viewer.html` in a browser
 
 ## Troubleshooting
 
-**No detections showing**
-- Walk near CCTV cameras or surveillance equipment
-- Try different scan mode (tap screen top)
-- Some devices use MAC randomization
-
-**Screen blank**
-- Check USB power
-- Try pressing reset button
-- Check TFT connections (if DIY build)
-
-**SD card not detected**
-- Ensure FAT32 format
-- Try different SD card
-- Check GPIO 5 connection
+| Problem | Solution |
+|---------|----------|
+| Blank screen | Check USB power, press reset button |
+| Touch not responding | Verify your board has XPT2046 (not capacitive touch) |
+| SD card not detected | Reformat as FAT32, try a different card |
+| No detections | Walk near known CCTV cameras, check scan mode |
+| Upload fails | Hold BOOT button during upload, check COM port |
 
 ## Next Steps
 
-- Read full [README.md](README.md) for detailed features
-- Update OUI database with new manufacturers
-- Analyze logs with Python tools
-- Contribute new features!
+- Read the full [User Manual](USER_MANUAL.md) for all features
+- See [Hardware Setup](docs/HARDWARE_SETUP.md) for battery and enclosure options
+- Check the [FAQ](FAQ.md) for common questions
+- Update the OUI database with new manufacturers -- see [OUI Database Guide](docs/OUI_DATABASE_EXPANSION.md)
 
 ## Support
 
-- GitHub Issues: https://github.com/yourusername/uk-oui-spy/issues
-- Discussions: Check repository discussions tab
-
----
-
-**Happy Surveillance Detecting! 🕵️**
+Open an issue on GitHub: https://github.com/JosephR26/uk-oui-spy/issues
