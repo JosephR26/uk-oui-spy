@@ -2,179 +2,170 @@
 
 **Version 3.1.0**
 
-Thank you for purchasing the UK-OUI-SPY PRO, a professional-grade tool for detecting and analyzing surveillance devices. This manual will guide you through every feature of your new device.
-
 ## 1. Introduction
 
-The UK-OUI-SPY PRO is designed for security professionals, privacy advocates, and concerned citizens. It identifies nearby surveillance devices by scanning for their Wi-Fi and Bluetooth MAC addresses and matching them against a curated database of manufacturers.
+UK-OUI-SPY PRO is an open-source surveillance device detector built on the ESP32 platform. It identifies nearby surveillance equipment by scanning for their Wi-Fi and Bluetooth MAC addresses and matching them against a curated database of UK-relevant manufacturers.
 
-### 1.1. Box Contents
+This manual covers all device features, screens, and configuration options.
 
-*   1 x UK-OUI-SPY PRO Device
-*   1 x USB-C Charging Cable
-*   1 x Quick Start Guide
+### 1.1. Hardware Overview
 
-### 1.2. Device Overview
-
-*   **2.8" Capacitive Touchscreen**: The primary interface for all on-device operations.
-*   **USB-C Port**: For charging the internal LiPo battery.
-*   **MicroSD Card Slot**: For loading the OUI database and logging detections.
-*   **Status LEDs**: Provides at-a-glance status for power, scanning, and alerts.
+- **2.8" Resistive Touchscreen** (XPT2046, SPI) -- the primary interface for all on-device operations
+- **USB Port** -- for power and firmware flashing
+- **MicroSD Card Slot** -- for loading the OUI database and logging detections
+- **RGB LED** -- provides at-a-glance status (red = alert, blue = BLE scanning, green = Wi-Fi scanning)
 
 ## 2. Getting Started
 
-### 2.1. Charging the Device
+### 2.1. Preparing the MicroSD Card
 
-Before first use, fully charge the device by connecting the included USB-C cable to the port on the bottom of the device and a standard USB power adapter. The red status LED will turn off when charging is complete.
+1. Format a microSD card (up to 32GB) as **FAT32**.
+2. Download the latest `oui.csv` and `priority.json` files from the `examples/` folder in the repository.
+3. Copy both files to the root directory of the microSD card.
+4. Insert the card into the device's microSD card slot.
 
-### 2.2. Preparing the MicroSD Card
+### 2.2. First-Time Setup Wizard
 
-1.  Obtain a microSD card (up to 32GB) and format it as **FAT32**.
-2.  Download the latest `oui.csv` and `priority.json` files from our official GitHub repository.
-3.  Copy both files to the root directory of the microSD card.
-4.  Insert the card into the device's microSD card slot.
+On its first boot, the device launches a Setup Wizard that:
 
-### 2.3. First-Time Setup Wizard
+1. **Welcomes you** to the device.
+2. **Performs a Hardware Check** -- verifies that the touchscreen, SD card, OUI database, and battery are functioning correctly.
+3. **Confirms Readiness** -- once all checks pass, tap NEXT then GO to proceed.
 
-On its first boot, the device will launch a mandatory Setup Wizard. This wizard will:
+The wizard only runs once unless the configuration is reset.
 
-1.  **Welcome you** to the device.
-2.  **Perform a Hardware Check**: It verifies that the touchscreen, SD card, OUI database, and battery are all functioning correctly.
-3.  **Confirm Readiness**: Once all checks pass, you can proceed to the main interface.
+## 3. Touchscreen UI
 
-Follow the on-screen prompts by tapping "NEXT" and then "GO" to complete the setup. The device will not run the wizard again unless the configuration is reset.
+A persistent navigation bar at the bottom of the screen lets you switch between 7 screens.
 
-## 3. On-Device Touchscreen UI
+### 3.1. Screen Reference
 
-The primary interface is the 2.8" touchscreen. A persistent navigation bar at the bottom allows you to switch between 7 different screens.
+| Button | Screen | Description |
+|--------|--------|-------------|
+| LIST | Detections | Main screen. Real-time, scrollable list of detected devices |
+| RADAR | Radar | Proximity visualisation -- dots represent detected devices |
+| GRAPH | Signal | RSSI history graph for a selected device |
+| HIST | History | Past detections loaded from the SD card log |
+| MAP | Map | Grid-based proximity map with optional GPS coordinates |
+| CFG | Config | Toggle settings: BLE, Wi-Fi, promiscuous mode, encryption, etc. |
+| INFO | Status | Firmware version, battery, memory, OUI count, uptime |
 
-### 3.1. The 7 Screens
+### 3.2. LIST -- Detection Screen
 
-| Icon | Name      | Description                                                                 |
-| :--- | :-------- | :-------------------------------------------------------------------------- |
-| LIST | Detections| The main screen. A scrollable, real-time list of all detected devices.      |
-| RADAR| Radar     | A proximity radar visualizing the relative distance of detected devices.    |
-| GRAPH| Signal    | A line graph showing the signal strength (RSSI) history of a selected device. |
-| HIST | History   | A view of past detections loaded from the SD card log file.                 |
-| MAP  | Map       | A grid-based proximity map showing device positions.                        |
-| CFG  | Config    | The settings page for configuring all device options.                       |
-| INFO | Status    | A system information page showing firmware, hardware, and memory status.    |
+The default screen. Shows a live, colour-coded list of all detected devices, sorted by priority tier.
 
-### 3.2. LIST - The Detection Screen
+- **Tiered Display** -- Devices grouped by priority (e.g. HIGH VALUE TARGET, SURVEILLANCE INFRA)
+- **Filtering** -- Tap the filter bar (ALL / HIGH / MED / LOW) to show specific relevance levels
+- **Scrolling** -- Swipe up/down to scroll through detections
+- **Selection** -- Tap a device to highlight it and use its data on the GRAPH screen
 
-This is the default screen. It shows a live, color-coded list of all detected devices, sorted by priority tier.
+### 3.3. RADAR -- Proximity Visualisation
 
-*   **Tiered Display**: Devices are grouped into priority tiers (e.g., `***** HIGH VALUE TARGET`) for instant threat assessment.
-*   **Filtering**: Tap the filter bar at the top (**ALL / HIGH / MED / LOW**) to show only devices of a certain relevance level.
-*   **Scrolling**: Swipe up and down on the list to scroll through detections.
-*   **Selection**: Tap on any device in the list to select it. The selected device will be highlighted and its data will be used in the **GRAPH** screen.
+A radar-style view of detected devices.
 
-### 3.3. RADAR - Proximity Visualization
+- **Centre** = your position
+- **Distance from centre** = relative signal strength (closer = stronger signal)
+- **Dot colour** = threat score
 
-This screen provides a classic radar-style view of the surrounding environment. Each dot represents a detected device.
+### 3.4. GRAPH -- Signal Strength History
 
-*   **Center**: The center of the radar represents your position.
-*   **Distance**: Devices closer to the center have a stronger signal (are likely nearer).
-*   **Color**: The color of the dot corresponds to its **Threat Score**.
+Plots the RSSI of the device you selected on the LIST screen over time. Useful for determining if a device is moving closer or further away.
 
-### 3.4. GRAPH - Signal Strength History
+### 3.5. HIST -- Detection History
 
-This screen plots the RSSI (Received Signal Strength Indicator) of the device you selected on the **LIST** screen. This is useful for determining if a device is moving closer or further away over time.
+Loads and displays the last 50 entries from `detections.csv` on the SD card. Useful for reviewing past activity without removing the card.
 
-### 3.5. HIST - Detection History
+### 3.6. MAP -- Grid Proximity Map
 
-This screen loads and displays the last 50 entries from the `detections.csv` log file on the SD card. It provides a quick way to review past activity without removing the SD card.
+Shows detected devices on a grid. If a GPS module is connected and has a fix, your coordinates are displayed.
 
-### 3.6. MAP - Grid Proximity Map
+### 3.7. CFG -- Configuration
 
-Similar to the radar, this screen shows detected devices on a grid. If a GPS module is connected and has a fix, your current coordinates will be displayed.
+Real-time configuration toggles:
 
-### 3.7. CFG - Configuration
+- BLE scanning on/off
+- Wi-Fi scanning on/off
+- Promiscuous mode on/off
+- SD card logging on/off
+- AES-128 encryption on/off
+- Auto-brightness on/off
+- Web portal on/off
+- Deep sleep mode on/off
+- Police filter on/off
 
-This screen allows you to configure the device in real-time.
+All settings are saved to non-volatile storage automatically.
 
-*   **Toggles**: Enable or disable key features like BLE/WiFi scanning, promiscuous mode, SD logging, encryption, auto-brightness, and the web portal.
-*   **Brightness Slider**: If auto-brightness is disabled, a slider appears, allowing you to manually set the screen brightness.
+### 3.8. INFO -- System Status
 
-All settings are saved automatically to the device's non-volatile storage.
+Displays firmware version, battery voltage, OUI database count, free memory, hardware status, total packets captured, recurring device count, uptime, and connected web clients.
 
-### 3.8. INFO - System Status
+## 4. Embedded Web Portal
 
-This page provides a detailed overview of the device's status, including:
+The device hosts its own Wi-Fi hotspot and web server for access from any phone, tablet, or laptop.
 
-*   Firmware Version
-*   Battery Voltage
-*   OUI Database Entry Count
-*   Free Memory
-*   Hardware Status (Touch, SD Card, GPS)
-*   Total Packets Captured
-*   Recurring Device Count
-*   System Uptime
-*   Connected Web Clients
+### 4.1. Connecting
 
-## 4. The Embedded Web Portal
-
-For a richer experience, the UK-OUI-SPY PRO hosts its own Wi-Fi hotspot and web server, allowing you to interact with it from any phone, tablet, or laptop.
-
-### 4.1. Connecting to the Web Portal
-
-1.  On your phone or computer, open your Wi-Fi settings.
-2.  Connect to the network named **"OUI-SPY-PRO"**.
-3.  Enter the password: **`spypro2026`**
-4.  A captive portal should automatically open your browser to the dashboard. If not, manually navigate to `http://192.168.4.1`.
+1. On your phone/computer, connect to Wi-Fi network **OUI-SPY-PRO**
+2. Password: **spypro2026**
+3. A captive portal should open automatically. If not, navigate to **http://192.168.4.1**
 
 ### 4.2. Web Portal Features
 
-The web portal mirrors and extends the functionality of the on-device UI.
-
-*   **Dashboard**: A real-time overview of system status and the most recent detections.
-*   **Detections Page**: A full, searchable, and filterable list of all detections.
-*   **Radar Page**: A large, interactive canvas-based radar visualization.
-*   **Settings Page**: Remotely configure all device settings.
-*   **Logs Page**: View recent log entries and **download the full `detections.csv` file** directly to your computer.
+- **Dashboard** -- real-time system status and recent detections
+- **Detections** -- full, searchable, filterable detection list
+- **Radar** -- large interactive radar visualisation
+- **Settings** -- remotely configure all device settings
+- **Logs** -- view log entries and download `detections.csv` directly
 
 ## 5. Advanced Features
 
 ### 5.1. Threat Intelligence Engine
 
-The device doesn't just detect; it analyzes. A composite **Threat Score (0-100)** is calculated for each device based on:
+A composite **Threat Score (0-100)** calculated for each device based on:
 
-*   **Relevance**: The inherent risk of the device type (e.g., a police bodycam is higher than a consumer doorbell).
-*   **Proximity**: How strong the signal is.
-*   **Recurrence**: How many times the device has been seen.
-*   **Dwell Time**: How long the device has been in the vicinity.
-*   **Category**: Certain categories (e.g., Facial Recognition) receive a score boost.
+- **Relevance** -- inherent risk of the device type
+- **Proximity** -- signal strength (RSSI)
+- **Recurrence** -- how many times the device has been seen
+- **Dwell Time** -- how long the device has been nearby
+- **Category** -- certain categories (facial recognition, drones) receive a score boost
+- **1.5x multiplier** for police/enforcement devices
+- **1.3x multiplier** for close-range proximity (RSSI > -50)
 
 ### 5.2. Correlation Detection Engine
 
-The device automatically identifies and alerts on coordinated surveillance operations. When a rule is triggered, a flashing red banner appears at the top of the screen.
+Automatically identifies coordinated surveillance operations. Triggers a flashing red banner.
 
-| Rule ID | Name | Description | Alert Level |
-| :--- | :--- | :--- | :--- |
-| `skydio_active_ops` | SKYDIO OPS ACTIVE | Skydio controller + drone both detected | CRITICAL |
-| `dji_active_ops` | DJI DRONE OPS | DJI drone platform detected | HIGH |
-| `surveillance_cluster` | SURVEILLANCE CLUSTER | 3+ govt CCTV devices detected | HIGH |
-| `facial_recognition_zone` | FACE RECOG ZONE | Genetec infrastructure detected | CRITICAL |
-| `smart_city_zone` | SMART CITY ZONE | 2+ smart city infrastructure devices detected | HIGH |
+| Rule | Description | Alert Level |
+|------|-------------|-------------|
+| SKYDIO OPS ACTIVE | Skydio controller + drone both detected | CRITICAL |
+| DJI DRONE OPS | DJI drone platform detected | HIGH |
+| SURVEILLANCE CLUSTER | 3+ government CCTV devices detected | HIGH |
+| FACE RECOG ZONE | Genetec facial recognition infrastructure | CRITICAL |
+| SMART CITY ZONE | 2+ smart city infrastructure devices | HIGH |
 
-### 5.3. Behavioral Analysis
+### 5.3. Behavioural Analysis
 
-The device analyzes RSSI fluctuations to classify devices as **FIXED** (likely stationary, like a CCTV camera) or **MOBILE** (likely moving, like a bodycam or drone).
+The device analyses RSSI fluctuations to classify devices as **FIXED** (stationary, like a CCTV camera) or **MOBILE** (moving, like a body camera or drone).
 
 ### 5.4. Secure Logging (AES-128)
 
-When enabled in the Settings, all logs written to the SD card are encrypted using AES-128. This protects your sensitive detection data if the device is lost or confiscated. A companion decryption tool will be available from our GitHub repository.
+When enabled in Settings, all logs written to the SD card are encrypted using AES-128.
 
 ## 6. Maintenance
 
 ### 6.1. Updating the Firmware
 
-Periodically check the official GitHub repository for new firmware releases. Follow the instructions in the `README.md` file to update your device to the latest version.
+Check the [GitHub repository](https://github.com/JosephR26/uk-oui-spy) for new releases. Pull the latest code and re-flash:
+
+```bash
+git pull
+pio run --target upload
+```
 
 ### 6.2. Updating the OUI Database
 
-The `oui.csv` and `priority.json` files are the heart of the detection engine. Download the latest versions from the GitHub repository and replace the files on your SD card to ensure you can detect the newest devices.
+Download the latest `oui.csv` and `priority.json` files from the repository and replace the files on your SD card.
 
 ## 7. Legal Disclaimer
 
-This device is intended for educational and professional security auditing purposes only. The use of this device for any illegal or unauthorized activities is strictly prohibited. The developers are not responsible for any misuse of this product. Always ensure you are compliant with local laws and regulations regarding radio scanning and privacy in your jurisdiction.
+This device is for educational and professional security auditing purposes only. Use responsibly and in compliance with all local laws. See [LEGAL.md](LEGAL.md) for the full legal disclaimer and licence.
