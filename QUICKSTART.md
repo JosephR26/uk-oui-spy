@@ -7,11 +7,11 @@ Get up and running in 5 minutes.
 - **ESP32-2432S028** board (CYD with XPT2046 resistive touch)
 - **MicroSD card** (4-32GB, FAT32)
 - **USB cable** (Micro-USB or USB-C, depending on your board variant)
-- **PlatformIO** or **Arduino IDE** installed on your computer
+- **[VS Code](https://code.visualstudio.com/)** with the **[PlatformIO extension](https://platformio.org/install/ide?install=vscode)**
 
 ## Step 1: Clone & Build
 
-**PlatformIO (recommended):**
+Install [VS Code](https://code.visualstudio.com/) with the [PlatformIO extension](https://platformio.org/install/ide?install=vscode), then:
 
 ```bash
 git clone https://github.com/JosephR26/uk-oui-spy.git
@@ -19,13 +19,7 @@ cd uk-oui-spy
 pio run
 ```
 
-**Arduino IDE:**
-
-1. Install ESP32 board support
-2. Install libraries: `TFT_eSPI`, `NimBLE-Arduino`, `ArduinoJson`
-3. Open `src/main.cpp`
-4. Select board: ESP32 Dev Module
-5. Click Upload
+Or open the project folder in VS Code and click the PlatformIO Upload button (arrow icon in the bottom toolbar).
 
 ## Step 2: Prepare SD Card
 

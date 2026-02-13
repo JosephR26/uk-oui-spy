@@ -91,21 +91,15 @@ This firmware runs on the **ESP32-2432S028** ("Cheap Yellow Display"), available
 
 ### 1. Build & Flash
 
+Install [VS Code](https://code.visualstudio.com/) with the [PlatformIO extension](https://platformio.org/install/ide?install=vscode), then:
+
 ```bash
 git clone https://github.com/JosephR26/uk-oui-spy.git
 cd uk-oui-spy
 pio run --target upload
 ```
 
-<details>
-<summary>Using Arduino IDE instead?</summary>
-
-1. Install [ESP32 board support](https://docs.espressif.com/projects/arduino-esp32/en/latest/installing.html)
-2. Install libraries: `TFT_eSPI` (v2.5.43+), `NimBLE-Arduino` (v1.4.1+), `ArduinoJson` (v6.21+)
-3. Select board: **ESP32 Dev Module**
-4. Open `src/main.cpp` and upload
-
-</details>
+Or open the project folder in VS Code and click the PlatformIO Upload button.
 
 ### 2. Prepare SD Card
 

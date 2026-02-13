@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Buzzer support (device relies on screen and LED alerts)
 - CST820/FT6236 capacitive touch support (XPT2046 only)
-- Arduino IDE .ino wrapper file (use PlatformIO or build from src/)
+- Arduino IDE .ino wrapper file (build via VS Code + PlatformIO, or from src/)
 
 ## [1.0.2] - 2026-01-26
 
