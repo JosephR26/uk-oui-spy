@@ -1,52 +1,95 @@
-# UK-OUI-SPY PRO v3.1.0
+<div align="center">
 
-**Portable UK Surveillance Device Detector**
+# UK-OUI-SPY PRO
 
-<a href="https://ibb.co/JWz5T5w6"><img src="https://i.ibb.co/hxKDNDJQ/20260211-022216.jpg" alt="UK-OUI-SPY PRO Device" border="0"></a>
+### Know What's Watching You
 
-UK-OUI-SPY PRO is an open-source, portable surveillance device detector built on the ESP32 platform. It identifies nearby CCTV cameras, ANPR systems, drones, body cameras, and other surveillance equipment by matching their Wi-Fi and Bluetooth MAC addresses against a curated database of UK-relevant manufacturers (OUIs).
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LEGAL.md)
+[![Platform: ESP32](https://img.shields.io/badge/Platform-ESP32-red.svg)](https://www.espressif.com/en/products/socs/esp32)
+[![Version: 3.1.0](https://img.shields.io/badge/Version-3.1.0-green.svg)](CHANGELOG.md)
+[![OUI Database: 280+](https://img.shields.io/badge/OUI_Database-280%2B-orange.svg)](docs/OUI_DATABASE_EXPANSION.md)
 
-Built for security professionals, privacy researchers, and anyone interested in understanding the surveillance landscape around them.
+<br>
 
-## Features
+<a href="https://ibb.co/JWz5T5w6"><img src="https://i.ibb.co/hxKDNDJQ/20260211-022216.jpg" alt="UK-OUI-SPY PRO Device" width="600"></a>
 
-- **Dual-Mode Scanning** -- Simultaneous Wi-Fi and Bluetooth Low Energy (BLE) detection
-- **Promiscuous Mode** -- Captures raw Wi-Fi management frames to find hidden/non-broadcasting devices
-- **280+ OUI Database** -- Curated database of UK surveillance manufacturers, loadable from SD card
-- **Threat Intelligence** -- Composite threat scoring (0-100) based on relevance, proximity, recurrence, and behaviour
-- **Tiered Priority Display** -- Detections grouped by priority tier for instant threat assessment
-- **Correlation Engine** -- Automatically identifies coordinated surveillance operations (e.g. drone + controller)
-- **Behavioural Analysis** -- Classifies devices as FIXED or MOBILE based on RSSI variance
-- **7-Screen Touchscreen UI** -- LIST, RADAR, GRAPH, HISTORY, MAP, CONFIG, INFO
-- **Embedded Web Portal** -- Full dashboard accessible from any phone/laptop over local Wi-Fi hotspot
-- **Secure Logging** -- CSV logging to SD card with optional AES-128 encryption
-- **GPS Support** -- Optional GPS module for location tagging
-- **Deep Sleep Mode** -- 24+ hour battery life on 1000mAh LiPo
+<br>
+
+**A portable, open-source surveillance detector that identifies CCTV cameras, ANPR systems, police drones, body cameras, and facial recognition infrastructure by their wireless signatures.**
+
+Built on a ~£15 ESP32 board. Fits in your pocket. Runs for 24+ hours on a coin-cell LiPo.
+
+[Quick Start](QUICKSTART.md) · [User Manual](USER_MANUAL.md) · [Hardware Guide](docs/HARDWARE_SETUP.md) · [FAQ](FAQ.md)
+
+</div>
+
+---
+
+## Why This Exists
+
+The UK has one of the highest densities of surveillance cameras in the world. Most people walk past hundreds of cameras daily without knowing what's collecting their data, who operates it, or whether facial recognition is active.
+
+UK-OUI-SPY PRO makes the invisible visible. Every Wi-Fi and Bluetooth device broadcasts a manufacturer ID (OUI) in its MAC address. This device listens for those broadcasts and cross-references them against a curated database of 280+ UK surveillance equipment manufacturers -- from Hikvision council CCTV to Axon police body cameras to NEC facial recognition systems.
+
+No hacking. No interception. Just passive listening to publicly broadcast signals.
+
+---
+
+## What It Detects
+
+| | Category | What It Finds |
+|---|----------|--------------|
+| **RED** | CCTV / ANPR / Drones | Government cameras, number plate readers, police drones |
+| **ORANGE** | Body Cams / Cloud CCTV | Police body cameras, Verkada/Meraki enterprise systems |
+| **PURPLE** | Facial Recognition | NEC NeoFace, Cognitec, BriefCam, Facewatch |
+| **YELLOW** | Traffic / Parking / Smart City | ULEZ cameras, council CCTV, smart poles |
+| **GREEN** | Consumer | Ring doorbells, Nest cams, dash cameras |
+
+---
+
+## Key Features
+
+**Dual-Mode Scanning** -- Simultaneous Wi-Fi and Bluetooth Low Energy detection with promiscuous mode for hidden devices
+
+**Threat Intelligence Engine** -- Every detection scored 0-100 based on device type, proximity, recurrence, and dwell time. Police/enforcement devices get a 1.5x multiplier. Close-range proximity gets 1.3x.
+
+**Correlation Detection** -- Automatically flags coordinated surveillance. Skydio drone + controller? Flashing red `SKYDIO OPS ACTIVE` banner. 3+ government cameras in range? `SURVEILLANCE CLUSTER` alert.
+
+**7-Screen Touchscreen UI** -- LIST, RADAR, GRAPH, HISTORY, MAP, CONFIG, INFO. Swipe navigation, colour-coded priority tiers, real-time filtering.
+
+<!-- Add UI screenshot here: device showing LIST screen with detections -->
+
+**Embedded Web Portal** -- Connect your phone to the device's Wi-Fi hotspot and get a full dashboard at `192.168.4.1`. Real-time detections, radar view, settings, log downloads.
+
+<!-- Add web portal screenshot here -->
+
+**Secure Logging** -- All detections logged to SD card as CSV. Optional AES-128 encryption. Analyse later with the included Python script or browser-based viewer.
+
+**24+ Hour Battery** -- Deep sleep mode on a 1000mAh LiPo. USB-powered for unlimited runtime.
+
+---
 
 ## Hardware
 
-This firmware targets the **ESP32-2432S028** ("Cheap Yellow Display" / CYD), a low-cost all-in-one development board:
+Total cost: **~£20**
+
+This firmware runs on the **ESP32-2432S028** ("Cheap Yellow Display"), available on AliExpress, eBay, and Amazon UK:
 
 | Component | Specification |
 |-----------|--------------|
-| **MCU** | ESP32-WROOM-32 (dual-core, 240MHz) |
-| **Display** | 2.8" ILI9341 TFT (240x320, SPI) |
-| **Touch** | XPT2046 resistive touch controller (SPI) |
-| **Storage** | MicroSD card slot (FAT32, up to 32GB) |
-| **Connectivity** | Wi-Fi 802.11 b/g/n, Bluetooth 4.2 BLE |
-| **Peripherals** | RGB LED, LDR (ambient light sensor) |
+| MCU | ESP32-WROOM-32 (dual-core, 240MHz, Wi-Fi + BLE) |
+| Display | 2.8" ILI9341 TFT (240x320, SPI) |
+| Touch | XPT2046 resistive (SPI, CS on GPIO 33) |
+| Storage | MicroSD slot (FAT32, up to 32GB) |
+| Extras | RGB LED, LDR light sensor, TP4056 LiPo charging |
 
-> **Note**: There are several CYD variants. This firmware is configured for the version with **XPT2046 resistive touch** (SPI, active-low CS on GPIO 33). Check your board's touch controller IC before flashing.
+> **Important**: There are several CYD variants with different touch controllers. This firmware requires the **XPT2046 resistive touch** version. If your board has CST820 or FT6236 (capacitive, I2C), it will not work without modification. Check the chip markings before buying.
 
-## Getting Started
+---
 
-### Prerequisites
+## Quick Start
 
-- [PlatformIO](https://platformio.org/) (recommended) or Arduino IDE
-- USB cable for your board (Micro-USB or USB-C depending on variant)
-- MicroSD card (4-32GB, formatted FAT32)
-
-### Build & Flash (PlatformIO)
+### 1. Build & Flash
 
 ```bash
 git clone https://github.com/JosephR26/uk-oui-spy.git
@@ -54,84 +97,119 @@ cd uk-oui-spy
 pio run --target upload
 ```
 
-### Build & Flash (Arduino IDE)
+<details>
+<summary>Using Arduino IDE instead?</summary>
 
 1. Install [ESP32 board support](https://docs.espressif.com/projects/arduino-esp32/en/latest/installing.html)
-2. Select board: **ESP32 Dev Module**
-3. Install libraries via Library Manager:
-   - `TFT_eSPI` by Bodmer (v2.5.43+)
-   - `NimBLE-Arduino` by h2zero (v1.4.1+)
-   - `ArduinoJson` by Benoit Blanchon (v6.21+)
-4. Open `UK_OUI_SPY_PRO.ino` and upload
+2. Install libraries: `TFT_eSPI` (v2.5.43+), `NimBLE-Arduino` (v1.4.1+), `ArduinoJson` (v6.21+)
+3. Select board: **ESP32 Dev Module**
+4. Open `src/main.cpp` and upload
 
-### First Boot
+</details>
 
-1. **Prepare SD Card** -- Format as FAT32, copy `oui.csv` and `priority.json` from the `examples/` folder to the root
-2. **Power On** -- The Setup Wizard runs on first boot to verify hardware (touch, SD, battery)
-3. **Start Scanning** -- Navigate using the bottom nav bar. Detections appear automatically
-4. **Web Portal** -- Connect to Wi-Fi network `OUI-SPY-PRO` (password: `spypro2026`), then open `http://192.168.4.1`
+### 2. Prepare SD Card
 
-## Detection Categories
+Format a microSD card as FAT32. Copy `examples/oui.csv` and `examples/priority.json` to the root. Insert into the board.
 
-| Category | Description | Colour |
-|----------|-------------|--------|
-| CCTV | Fixed surveillance cameras | Red |
-| ANPR | Automatic number plate recognition | Red |
-| Drone | Quadcopters and autonomous drones | Red |
-| Body Cam | Police/security body cameras | Orange |
-| Cloud CCTV | Cloud-connected camera systems | Orange |
-| Facial Recog | Facial recognition systems | Purple |
-| Traffic | Traffic monitoring infrastructure | Yellow |
-| Parking | Council parking enforcement cameras | Yellow |
-| Smart City | IoT/smart city infrastructure | Yellow |
-| Dash Cam | Vehicle dash cameras | Green |
-| Doorbell | Smart doorbell cameras | Green |
+### 3. Boot & Scan
 
-## Priority Tiers
+Power on. The Setup Wizard verifies your hardware on first boot. Tap through it, and the device starts scanning automatically. Detections appear as colour-coded cards sorted by threat level.
 
-| Tier | Level | Examples |
-|------|-------|----------|
-| 5 (Red) | CRITICAL | Government CCTV, drones, facial recognition |
-| 4 (Orange) | HIGH | Surveillance infrastructure, body cameras |
-| 3 (Yellow) | MODERATE | Vehicle CCTV, traffic systems |
-| 2 (Green) | LOW | Consumer cameras, doorbells |
-| 1 (Grey) | BASELINE | ISP routers, consumer devices (filtered) |
+### 4. Web Portal (Optional)
+
+Connect your phone to Wi-Fi network **`OUI-SPY-PRO`** (password: `spypro2026`). Open **http://192.168.4.1** for the full dashboard.
+
+---
+
+## Threat Scoring
+
+Each detection receives a composite threat score (0-100):
+
+```
+Score = (Relevance + Proximity + Recurrence + Dwell Time) x Category Multiplier
+```
+
+| Factor | How It Works |
+|--------|-------------|
+| Relevance | Inherent risk of the device type (police CCTV > doorbell) |
+| Proximity | Signal strength -- closer devices score higher |
+| Recurrence | Devices seen repeatedly score higher |
+| Dwell Time | Longer presence = higher score |
+| Category Boost | Facial recognition, drones, ANPR get extra weight |
+| Enforcement x1.5 | Police/government devices multiplied |
+| Close Range x1.3 | RSSI > -50 dBm (within ~2m) multiplied |
+
+---
+
+## Correlation Alerts
+
+The device automatically identifies coordinated surveillance operations:
+
+| Alert | Trigger | Level |
+|-------|---------|-------|
+| `SKYDIO OPS ACTIVE` | Skydio controller + drone both detected | CRITICAL |
+| `FACE RECOG ZONE` | Facial recognition infrastructure detected | CRITICAL |
+| `DJI DRONE OPS` | DJI drone platform in range | HIGH |
+| `SURVEILLANCE CLUSTER` | 3+ government CCTV devices | HIGH |
+| `SMART CITY ZONE` | 2+ smart city infrastructure devices | HIGH |
+
+---
 
 ## Analysis Tools
 
-Two offline tools are included for analysing detection logs from the SD card:
+Two offline tools for analysing SD card logs after a session:
 
-- **Python Script** -- `python analysis/analyze_detections.py detections.csv` -- statistical breakdown, category analysis, top manufacturers
-- **Web Viewer** -- Open `visualization/detections_viewer.html` in a browser, load your CSV -- interactive charts, filtering, colour-coded cards. 100% local, no data uploaded.
+**Python Script** -- Terminal-based statistical breakdown
+```bash
+python analysis/analyze_detections.py detections.csv
+```
+
+**Web Viewer** -- Interactive browser dashboard with charts, filtering, and colour-coded cards. 100% local, no data uploaded.
+```
+Open visualization/detections_viewer.html in any browser
+```
+
+<!-- Add analysis tool screenshot here -->
+
+---
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [Quick Start Guide](QUICKSTART.md) | 5-minute setup guide |
-| [User Manual](USER_MANUAL.md) | Complete feature guide for all 7 screens |
-| [Hardware Setup](docs/HARDWARE_SETUP.md) | Assembly, wiring, enclosure options |
-| [FAQ](FAQ.md) | Common questions, troubleshooting |
-| [OUI Database Guide](docs/OUI_DATABASE_EXPANSION.md) | How to add new manufacturers |
-| [WiGLE Search Guide](docs/WIGLE_SEARCH_GUIDE.md) | Using WiGLE for device research |
-| [Changelog](CHANGELOG.md) | Version history |
-| [Legal](LEGAL.md) | Licence, disclaimer, privacy notice |
+| **[Quick Start Guide](QUICKSTART.md)** | 5-minute setup, build, and first scan |
+| **[User Manual](USER_MANUAL.md)** | Complete guide to all 7 screens and features |
+| **[Hardware Setup](docs/HARDWARE_SETUP.md)** | Pin assignments, battery, enclosure options |
+| **[FAQ](FAQ.md)** | Common questions and troubleshooting |
+| **[OUI Database Guide](docs/OUI_DATABASE_EXPANSION.md)** | Database format, coverage, adding new manufacturers |
+| **[Changelog](CHANGELOG.md)** | Version history |
+| **[Legal](LEGAL.md)** | Licence, disclaimer, privacy notice |
+
+---
 
 ## Contributing
 
-Contributions are welcome. You can help by:
+Contributions welcome:
 
-- **Reporting new OUIs** -- Found a surveillance manufacturer we're missing? Open an issue with the OUI, manufacturer name, and evidence of UK deployment
-- **Field testing** -- Share detection reports (anonymised) to help validate the database
-- **Code** -- Bug fixes, new features, performance improvements via pull request
+- **Report new OUIs** -- Found a surveillance manufacturer we're missing? Open an issue with the OUI, manufacturer name, and evidence of UK deployment
+- **Field test** -- Share anonymised detection reports to help validate the database
+- **Code** -- Bug fixes, features, and performance improvements via pull request
 - **Documentation** -- Tutorials, translations, use-case write-ups
+
+---
 
 ## Legal
 
-This device is for **educational and professional security auditing purposes only**. It operates by passively receiving publicly broadcast radio signals. It does not intercept, decrypt, or store the content of any communications. Passive radio monitoring is legal in the UK under the Wireless Telegraphy Act.
+This device is for **educational and professional security auditing purposes only**. It operates by passively receiving publicly broadcast radio signal metadata (MAC addresses and signal strength). It does not intercept, decrypt, or store the content of any communications.
 
-Users are solely responsible for compliance with all applicable laws including GDPR and the UK Data Protection Act 2018. See [LEGAL.md](LEGAL.md) for the full disclaimer and MIT licence.
+Passive reception of broadcast metadata is not prohibited under the Wireless Telegraphy Act 2006, provided no private communications content is intercepted or disclosed (Section 48). Users are solely responsible for compliance with all applicable laws including GDPR and the UK Data Protection Act 2018.
 
-## Licence
+See [LEGAL.md](LEGAL.md) for the full disclaimer, privacy notice, and MIT licence.
 
-MIT Licence -- see [LEGAL.md](LEGAL.md) for details.
+---
+
+<div align="center">
+
+**MIT Licence** · Built in Wales · [Report an Issue](https://github.com/JosephR26/uk-oui-spy/issues)
+
+</div>

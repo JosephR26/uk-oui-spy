@@ -4,25 +4,25 @@ Web-based visualization and analysis tool for UK-OUI-SPY detection logs.
 
 ## Features
 
-✨ **Interactive Dashboard**
+**Interactive Dashboard**
 - Real-time statistics
 - Category breakdowns
 - Relevance analysis
 - Top manufacturers
 
-📊 **Visual Charts**
+**Visual Charts**
 - Category distribution bar charts
 - Relevance level visualization
 - Top 10 manufacturers
 - Responsive design
 
-🔍 **Advanced Filtering**
+**Advanced Filtering**
 - Filter by relevance (HIGH/MEDIUM/LOW)
 - Filter by category
 - Filter by manufacturer
 - Real-time updates
 
-📱 **Responsive Design**
+**Responsive Design**
 - Works on desktop, tablet, and mobile
 - Touch-friendly interface
 - Optimized for all screen sizes
@@ -110,7 +110,7 @@ Visual breakdown of detected device types:
 Each detection shows:
 ```
 ┌───────────────────────────────────────┐
-│ 🔴 Hikvision                    [HIGH] │
+│ [!] Hikvision                   [HIGH] │
 │ Category: CCTV                         │
 │ MAC: A4:DA:32:XX:XX:XX                 │
 │ RSSI: -65 dBm                          │
@@ -121,21 +121,21 @@ Each detection shows:
 ```
 
 **Color Coding:**
-- 🔴 Red border = HIGH relevance
-- 🟡 Yellow border = MEDIUM relevance
-- 🟢 Green border = LOW relevance
+- Red border = HIGH relevance
+- Yellow border = MEDIUM relevance
+- Green border = LOW relevance
 
 ## Technical Details
 
 ### Browser Compatibility
 
-✅ **Supported Browsers:**
+**Supported Browsers:**
 - Chrome/Edge 90+
 - Firefox 88+
 - Safari 14+
 - Opera 76+
 
-❌ **Not Supported:**
+**Not Supported:**
 - Internet Explorer (any version)
 - Very old mobile browsers
 
@@ -162,7 +162,7 @@ Timestamp,MAC,OUI,Manufacturer,Category,Relevance,Deployment,RSSI,Type,Notes
 
 ### Privacy & Security
 
-🔒 **100% Local Processing**
+**100% Local Processing**
 - No data uploaded to servers
 - All processing done in your browser
 - No internet connection required
@@ -301,40 +301,28 @@ Then load `combined.csv` in viewer.
 
 ## Tips & Tricks
 
-💡 **Quick Filtering:**
+**Quick Filtering:**
 - Start with "All" to see full picture
 - Use HIGH filter for security assessment
 - Use LOW filter to see consumer devices
 
-💡 **RSSI Understanding:**
+**RSSI Understanding:**
 - -30 to -50: Very close (0-2m)
 - -50 to -70: Near (2-10m)
 - -70 to -90: Medium (10-30m)
 - Below -90: Far (30m+)
 
-💡 **Pattern Recognition:**
+**Pattern Recognition:**
 - Multiple Hikvision = likely police/council area
 - Ring/Nest cluster = residential neighborhood
 - DJI detections = active drone surveillance
 - Body cams = police presence
 
-💡 **Export for Presentations:**
+**Export for Presentations:**
 - Use browser print-to-PDF
 - Capture specific filtered views
 - Screenshot individual charts
 - Create before/after comparisons
-
-## Future Enhancements
-
-Planned features:
-- [ ] Timeline view of detections
-- [ ] Geographic mapping (with GPS data)
-- [ ] Export to PDF report
-- [ ] Signal strength heatmap
-- [ ] Device tracking over time
-- [ ] Statistical analysis tools
-- [ ] Customizable charts
-- [ ] Dark mode theme
 
 ## Support
 

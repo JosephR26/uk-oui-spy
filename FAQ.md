@@ -8,7 +8,7 @@ A: An open-source, portable device that detects nearby surveillance equipment (C
 
 **Q: Is this legal in the UK?**
 
-A: Yes. The device passively listens to publicly broadcast signals, which is legal under the UK Wireless Telegraphy Act. It does not intercept, record, or decrypt any content. You are responsible for using it ethically and in compliance with all local laws. See [LEGAL.md](LEGAL.md) for the full disclaimer.
+A: The device passively receives publicly broadcast signal metadata (MAC addresses and signal strength). It does not intercept, record, or decrypt any communications content. Passive reception of broadcast metadata is not prohibited under the Wireless Telegraphy Act 2006, provided no private communications content is intercepted or disclosed (Section 48). You are responsible for using it ethically and in compliance with all applicable laws. See [LEGAL.md](LEGAL.md) for the full disclaimer.
 
 **Q: What can't it detect?**
 
