@@ -62,7 +62,7 @@ pio run --target upload
    - `TFT_eSPI` by Bodmer (v2.5.43+)
    - `NimBLE-Arduino` by h2zero (v1.4.1+)
    - `ArduinoJson` by Benoit Blanchon (v6.21+)
-4. Open `UK_OUI_SPY_PRO.ino` and upload
+4. Open `src/main.cpp` and upload
 
 ### First Boot
 
@@ -112,8 +112,7 @@ Two offline tools are included for analysing detection logs from the SD card:
 | [User Manual](USER_MANUAL.md) | Complete feature guide for all 7 screens |
 | [Hardware Setup](docs/HARDWARE_SETUP.md) | Assembly, wiring, enclosure options |
 | [FAQ](FAQ.md) | Common questions, troubleshooting |
-| [OUI Database Guide](docs/OUI_DATABASE_EXPANSION.md) | How to add new manufacturers |
-| [WiGLE Search Guide](docs/WIGLE_SEARCH_GUIDE.md) | Using WiGLE for device research |
+| [OUI Database Guide](docs/OUI_DATABASE_EXPANSION.md) | Database format, coverage, and how to add new manufacturers |
 | [Changelog](CHANGELOG.md) | Version history |
 | [Legal](LEGAL.md) | Licence, disclaimer, privacy notice |
 
@@ -128,7 +127,7 @@ Contributions are welcome. You can help by:
 
 ## Legal
 
-This device is for **educational and professional security auditing purposes only**. It operates by passively receiving publicly broadcast radio signals. It does not intercept, decrypt, or store the content of any communications. Passive radio monitoring is legal in the UK under the Wireless Telegraphy Act.
+This device is for **educational and professional security auditing purposes only**. It operates by passively receiving publicly broadcast radio signals (MAC addresses and signal metadata only). It does not intercept, decrypt, or store the content of any communications. Passive reception of broadcast radio metadata is not prohibited under the Wireless Telegraphy Act 2006, provided no encrypted or private communications content is intercepted or disclosed (Section 48).
 
 Users are solely responsible for compliance with all applicable laws including GDPR and the UK Data Protection Act 2018. See [LEGAL.md](LEGAL.md) for the full disclaimer and MIT licence.
 

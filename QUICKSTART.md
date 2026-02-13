@@ -23,7 +23,7 @@ pio run
 
 1. Install ESP32 board support
 2. Install libraries: `TFT_eSPI`, `NimBLE-Arduino`, `ArduinoJson`
-3. Open `UK_OUI_SPY_PRO.ino`
+3. Open `src/main.cpp`
 4. Select board: ESP32 Dev Module
 5. Click Upload
 

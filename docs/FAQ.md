@@ -126,7 +126,7 @@ MAC addresses may be considered personal data under GDPR. For personal security 
 
 ### Is passive radio monitoring legal in the UK?
 
-Yes. The device only receives publicly broadcast signals. It does not transmit interfering signals, does not decrypt encrypted communications, and complies with the UK Wireless Telegraphy Act. See [LEGAL.md](../LEGAL.md) for the full disclaimer.
+The device only receives publicly broadcast signal metadata (MAC addresses and signal strength). It does not transmit interfering signals and does not decrypt encrypted communications. Passive reception of broadcast metadata is not prohibited under the Wireless Telegraphy Act 2006 (Section 48), provided no private communications content is intercepted or disclosed. See [LEGAL.md](../LEGAL.md) for the full disclaimer.
 
 ### What about the Computer Misuse Act?
 
