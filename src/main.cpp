@@ -197,7 +197,6 @@ void initTouch();
 void initBLE();
 void initWiFi();
 void initSDCard();
-uint8_t touchSpiTransfer(uint8_t data);
 uint16_t touchReadChannel(uint8_t cmd);
 void scanBLE();
 void scanWiFi();
@@ -518,7 +517,15 @@ void ScanTask(void *pvParameters) {
 }
 
 void UITask(void *pvParameters) {
+    Serial.println("[UI] UITask started on core " + String(xPortGetCoreID()));
+    unsigned long uiLoopCount = 0;
     for (;;) {
+        if (uiLoopCount < 3 || uiLoopCount % 100 == 0) {
+            Serial.printf("[UI] loop #%lu screen=%d BOOT=%s\n",
+                          uiLoopCount, (int)currentScreen,
+                          digitalRead(BOOT_BTN) == LOW ? "PRESSED" : "idle");
+        }
+        uiLoopCount++;
         handleTouchGestures();
         handleBootButton();
         if (config.autoBrightness) {
@@ -638,10 +645,14 @@ bool readTouch(uint16_t *x, uint16_t *y) {
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("UK-OUI-SPY PRO v" VERSION " starting...");
+    delay(500);  // Give serial monitor time to connect
+    Serial.println("\n\n============================");
+    Serial.println("UK-OUI-SPY PRO v" VERSION);
+    Serial.println("============================");
     xDetectionMutex = xSemaphoreCreateMutex();
 
     // Pin setup
+    Serial.println("[BOOT] Configuring GPIO...");
     pinMode(LED_PIN, OUTPUT);
     pinMode(LED_G_PIN, OUTPUT);
     pinMode(LED_B_PIN, OUTPUT);
@@ -650,29 +661,52 @@ void setup() {
     pinMode(BOOT_BTN, INPUT_PULLUP);
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
 
+    // Flash LED to confirm new firmware is running
+    digitalWrite(LED_PIN, HIGH);
+    delay(200);
+    digitalWrite(LED_PIN, LOW);
+
+    Serial.println("[BOOT] initDisplay...");
     initDisplay();
+    Serial.println("[BOOT] initDisplay OK");
+
+    Serial.println("[BOOT] initTouch...");
     initTouch();
+    Serial.println("[BOOT] initTouch OK");
+
+    Serial.println("[BOOT] loadConfig...");
     loadConfig();
+    Serial.println("[BOOT] loadConfig OK");
+
     // Skip wizard — boot straight to main screen
-    if (!config.setupComplete) {
-        config.setupComplete = true;
-        saveConfig();
-    }
+    config.setupComplete = true;
     currentScreen = SCREEN_MAIN;
+    Serial.println("[BOOT] Wizard skipped -> SCREEN_MAIN");
 
+    Serial.println("[BOOT] initSDCard...");
     initSDCard();
+    Serial.println("[BOOT] initSDCard OK");
 
-    Serial.printf("OUI database: %d entries\n", OUI_DATABASE_SIZE);
+    Serial.printf("[BOOT] OUI database: %d entries\n", OUI_DATABASE_SIZE);
 
     // Load priority database (SD first, then static fallback)
+    Serial.println("[BOOT] Loading priority DB...");
     if (!loadPriorityDB("/priority.json")) initializeStaticPriorityDB();
+    Serial.println("[BOOT] Priority DB OK");
 
+    Serial.println("[BOOT] initBLE...");
     initBLE();
+    Serial.println("[BOOT] initBLE OK");
+
+    Serial.println("[BOOT] initWiFi...");
     initWiFi();
+    Serial.println("[BOOT] initWiFi OK");
 
     lastInteractionTime = millis();
+    Serial.println("[BOOT] Starting FreeRTOS tasks...");
     xTaskCreatePinnedToCore(ScanTask, "ScanTask", 8192, NULL, 1, NULL, 0);
     xTaskCreatePinnedToCore(UITask, "UITask", 12288, NULL, 1, NULL, 1);
+    Serial.println("[BOOT] *** SETUP COMPLETE ***");
 }
 
 void loop() { vTaskDelay(pdMS_TO_TICKS(1000)); }
@@ -808,11 +842,11 @@ void addDetection(Detection det) {
 
 void updateDisplay() {
     switch (currentScreen) {
-        case SCREEN_WIZARD: drawWizardScreen(); break;
-        case SCREEN_MAIN: drawMainScreen(); break;
-        case SCREEN_RADAR: drawRadarScreen(); break;
+        case SCREEN_MAIN:     drawMainScreen(); break;
+        case SCREEN_RADAR:    drawRadarScreen(); break;
         case SCREEN_SETTINGS: drawSettingsScreen(); break;
-        case SCREEN_INFO: drawInfoScreen(); break;
+        case SCREEN_INFO:     drawInfoScreen(); break;
+        default:              currentScreen = SCREEN_MAIN; drawMainScreen(); break;
     }
 }
 
@@ -1196,16 +1230,7 @@ void handleTouchGestures() {
     if (millis() - lastTouch < 250) return;  // Debounce
     lastTouch = millis();
 
-    if (currentScreen == SCREEN_WIZARD) {
-        if (x > 220 && y > 170) {
-            wizardStep++;
-            if (wizardStep > 2) {
-                config.setupComplete = true;
-                saveConfig();
-                currentScreen = SCREEN_MAIN;
-            }
-        }
-    } else if (y > 210) {
+    if (y > 210) {
         // Navbar tap
         int newScreen = x / 80;
         if (newScreen >= 0 && newScreen <= 3) {
@@ -1244,21 +1269,13 @@ void handleBootButton() {
     lastPress = millis();
     lastInteractionTime = millis();
 
-    if (currentScreen == SCREEN_WIZARD) {
-        // Advance wizard exactly like tapping NEXT/FINISH
-        wizardStep++;
-        if (wizardStep > 2) {
-            config.setupComplete = true;
-            saveConfig();
-            currentScreen = SCREEN_MAIN;
-        }
-    } else {
-        // Cycle through main screens: MAIN -> ALERTS -> SETTINGS -> INFO -> MAIN
-        int s = (int)currentScreen + 1;
-        if (s > (int)SCREEN_INFO) s = (int)SCREEN_MAIN;
-        currentScreen = (Screen)s;
-        scrollOffset = 0;
-    }
+    // Cycle through screens (wizard is always skipped now)
+    Screen prev = currentScreen;
+    int s = (int)currentScreen + 1;
+    if (s > (int)SCREEN_INFO) s = (int)SCREEN_MAIN;
+    currentScreen = (Screen)s;
+    scrollOffset = 0;
+    Serial.printf("[BOOT BTN] Screen %d -> %d\n", (int)prev, (int)currentScreen);
 }
 
 // ============================================================
