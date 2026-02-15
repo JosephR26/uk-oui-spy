@@ -2,10 +2,10 @@
  * UK-OUI-SPY PRO EDITION v3.0.0
  * Professional UK Surveillance Device Detector
  *
- * Hardware: ESP32-2432S028 (2.8" ILI9341 TFT, capacitive touch)
+ * Hardware: ESP32-2432S028 (2.8" ILI9341 TFT, XPT2046 resistive touch)
  * Features: Tiered Priority Display, Correlation Detection Engine,
- *           FreeRTOS Dual-Core, O(1) OUI Lookup, Secure Logging,
- *           Radar Visualization, Setup Wizard, Power Management.
+ *           WiFi Promiscuous Sniffing, FreeRTOS Dual-Core,
+ *           Radar Visualization, Setup Wizard, Secure Logging.
  */
 
 #define VERSION "3.1.0-PRO"
@@ -53,6 +53,7 @@ uint16_t touchCalData[5] = {300, 3600, 300, 3600, 1};
 #define LED_B_PIN 17
 #define LDR_PIN 34
 #define BAT_ADC 35
+#define TOUCH_IRQ 36  // XPT2046 T_IRQ (active LOW on touch)
 
 // ============================================================
 // PRIORITY TIER SYSTEM
@@ -171,7 +172,7 @@ int scanInterval = 5000;
 bool scanning = false;
 bool sdCardAvailable = false;
 float batteryVoltage = 0.0;
-bool i2cAvailable = false;
+bool touchAvailable = false;
 int wizardStep = 0;
 int scrollOffset = 0;
 int maxScroll = 0;
@@ -459,6 +460,17 @@ class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
 };
 
 // ============================================================
+// WIFI PROMISCUOUS CALLBACK
+// ============================================================
+
+void onPromiscuousPacket(const uint8_t* mac, int8_t rssi, uint8_t channel) {
+    char macStr[18];
+    snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    checkOUI(String(macStr), rssi, false);
+}
+
+// ============================================================
 // FREERTOS TASKS
 // ============================================================
 
@@ -474,6 +486,10 @@ void ScanTask(void *pvParameters) {
             if (config.enableWiFi) {
                 digitalWrite(LED_G_PIN, HIGH);  // Green = WiFi scan
                 scanWiFi();
+                // Promiscuous mode: catches probe requests, hidden APs, non-broadcasting devices
+                startWiFiPromiscuous(onPromiscuousPacket);
+                scanAllChannels(onPromiscuousPacket, 150);
+                stopWiFiPromiscuous();
                 digitalWrite(LED_G_PIN, LOW);
             }
             scanning = false;
@@ -545,14 +561,13 @@ void setup() {
     // XPT2046 touch calibration
     tft.setTouch(touchCalData);
     Serial.println("XPT2046 touch initialized (SPI, CS=GPIO 33)");
-    i2cAvailable = true;  // Flag reused for "touch available"
+    touchAvailable = true;
     loadConfig();
     currentScreen = config.setupComplete ? SCREEN_MAIN : SCREEN_WIZARD;
 
     initSDCard();
 
-    // Load OUI database (SD first, then static fallback)
-    if (!loadOUIDatabaseFromSD("/oui.csv")) initializeStaticDatabase();
+    Serial.printf("OUI database: %d entries\n", OUI_DATABASE_SIZE);
 
     // Load priority database (SD first, then static fallback)
     if (!loadPriorityDB("/priority.json")) initializeStaticPriorityDB();
@@ -597,15 +612,15 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
     String oui = mac.substring(0, 8);
 
     // Check OUI database first
-    auto ouiIt = ouiLookup.find(toOuiKey(oui));
-    if (ouiIt == ouiLookup.end()) return;  // Not a known surveillance OUI
+    const OUIEntry* entry = findOUI(oui);
+    if (!entry) return;  // Not a known surveillance OUI
 
     // Build detection
     Detection det;
     det.macAddress = mac;
-    det.manufacturer = ouiIt->second->manufacturer;
-    det.category = ouiIt->second->category;
-    det.relevance = ouiIt->second->relevance;
+    det.manufacturer = entry->manufacturer;
+    det.category = entry->category;
+    det.relevance = entry->relevance;
     det.rssi = rssi;
     det.timestamp = millis();
     det.firstSeen = millis();
@@ -995,13 +1010,13 @@ void drawInfoScreen() {
 
     drawRow("Firmware:", VERSION);
     drawRow("Battery:", String(batteryVoltage, 2) + " V");
-    drawRow("OUI Database:", String(dynamicDatabase.size()) + " entries");
+    drawRow("OUI Database:", String(OUI_DATABASE_SIZE) + " entries");
     drawRow("Priority DB:", String(priorityDB.size()) + " entries");
     drawRow("Corr. Rules:", String(correlationRules.size()) + " rules");
     drawRow("Active Alerts:", String(activeAlerts.size()));
     drawRow("Detections:", String(detections.size()));
     drawRow("Free Memory:", String(ESP.getFreeHeap() / 1024) + " KB");
-    drawRow("Touch:", i2cAvailable ? "OK" : "ERROR");
+    drawRow("Touch:", touchAvailable ? "OK" : "ERROR");
     drawRow("SD Card:", sdCardAvailable ? "OK" : "NOT FOUND");
 
     drawNavbar();
@@ -1028,9 +1043,9 @@ void drawWizardScreen() {
         tft.print("Tap 'NEXT' to begin setup.");
     } else if (wizardStep == 1) {
         tft.setCursor(20, 60); tft.print("HARDWARE CHECK");
-        tft.setCursor(20, 85); tft.printf("Touch: %s", i2cAvailable ? "OK" : "ERROR");
+        tft.setCursor(20, 85); tft.printf("Touch: %s", touchAvailable ? "OK" : "ERROR");
         tft.setCursor(20, 100); tft.printf("SD Card: %s", sdCardAvailable ? "DETECTED" : "NOT FOUND");
-        tft.setCursor(20, 115); tft.printf("OUI DB: %d entries", dynamicDatabase.size());
+        tft.setCursor(20, 115); tft.printf("OUI DB: %d entries", OUI_DATABASE_SIZE);
         tft.setCursor(20, 130); tft.printf("Priority DB: %d entries", priorityDB.size());
         tft.setCursor(20, 145); tft.printf("Corr. Rules: %d", correlationRules.size());
     } else {
@@ -1184,6 +1199,6 @@ void enterDeepSleep() {
     digitalWrite(LED_PIN, LOW);
     digitalWrite(LED_G_PIN, LOW);
     digitalWrite(LED_B_PIN, LOW);
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_SDA, 0);
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_IRQ, 0);
     esp_deep_sleep_start();
 }

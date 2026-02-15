@@ -2,9 +2,6 @@
 #define OUI_DATABASE_H
 
 #include <Arduino.h>
-#include <string>
-#include <vector>
-#include <unordered_map>
 
 // Device categories
 enum DeviceCategory {
@@ -19,16 +16,14 @@ enum DeviceCategory {
     CAT_DOORBELL_CAM = 8,
     CAT_FACIAL_RECOG = 9,
     CAT_PARKING_ENFORCEMENT = 10,
-    CAT_SMART_CITY_INFRA = 11,
-    CAT_MAX = 11
+    CAT_SMART_CITY_INFRA = 11
 };
 
 // Relevance levels
 enum RelevanceLevel {
     REL_LOW = 0,
     REL_MEDIUM = 1,
-    REL_HIGH = 2,
-    REL_MAX = 2
+    REL_HIGH = 2
 };
 
 // Typical UK deployment
@@ -38,26 +33,25 @@ enum DeploymentType {
     DEPLOY_TRANSPORT = 2,
     DEPLOY_RETAIL = 3,
     DEPLOY_PRIVATE = 4,
-    DEPLOY_GOVERNMENT = 5,
-    DEPLOY_MAX = 5
+    DEPLOY_GOVERNMENT = 5
 };
 
 // OUI Database Entry
 struct OUIEntry {
-    String oui;              // First 3 bytes of MAC (e.g., "A4:DA:32")
-    String manufacturer;
+    const char* oui;              // First 3 bytes of MAC (e.g., "A4:DA:32")
+    const char* manufacturer;
     DeviceCategory category;
     RelevanceLevel relevance;
     DeploymentType deployment;
-    String notes;
+    const char* notes;
 };
 
-// Global dynamic database and lookup table
-extern std::vector<OUIEntry> dynamicDatabase;
-extern std::unordered_map<std::string, OUIEntry*> ouiLookup;
+// Static OUI database
+extern const OUIEntry OUI_DATABASE[];
+extern const size_t OUI_DATABASE_SIZE;
 
-// Convert Arduino String to std::string key for ouiLookup
-inline std::string toOuiKey(const String& s) { return std::string(s.c_str(), s.length()); }
+// Lookup an OUI prefix — returns nullptr if not found
+const OUIEntry* findOUI(const String& oui);
 
 // Helper functions
 const char* getCategoryName(DeviceCategory cat);
@@ -65,10 +59,5 @@ const char* getRelevanceName(RelevanceLevel rel);
 const char* getDeploymentName(DeploymentType dep);
 uint16_t getCategoryColor(DeviceCategory cat);
 uint16_t getRelevanceColor(RelevanceLevel rel);
-
-// Database management
-bool loadOUIDatabaseFromSD(const char* path);
-void initializeStaticDatabase(); // Fallback if SD fails
-void rebuildLookupTable();
 
 #endif
