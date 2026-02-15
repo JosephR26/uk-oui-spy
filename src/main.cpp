@@ -53,6 +53,7 @@ uint16_t touchCalData[5] = {300, 3600, 300, 3600, 1};
 #define LED_B_PIN 17
 #define LDR_PIN 34
 #define BAT_ADC 35
+#define TOUCH_IRQ 36  // XPT2046 T_IRQ (active LOW on touch)
 
 // ============================================================
 // PRIORITY TIER SYSTEM
@@ -1184,6 +1185,6 @@ void enterDeepSleep() {
     digitalWrite(LED_PIN, LOW);
     digitalWrite(LED_G_PIN, LOW);
     digitalWrite(LED_B_PIN, LOW);
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_SDA, 0);
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_IRQ, 0);
     esp_deep_sleep_start();
 }
