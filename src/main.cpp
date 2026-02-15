@@ -62,6 +62,7 @@
 #define LED_B_PIN 17
 #define LDR_PIN 34
 #define BAT_ADC 35
+#define BOOT_BTN 0    // BOOT button (active LOW, has internal pull-up)
 
 SPIClass sdSPI(VSPI);
 
@@ -211,6 +212,7 @@ void drawInfoScreen();
 void drawHeader(const char* title);
 void drawNavbar();
 void handleTouchGestures();
+void handleBootButton();
 void setBrightness(int level);
 void drawToggle(int x, int y, bool state, const char* label);
 void encryptAndLog(String data);
@@ -518,6 +520,7 @@ void ScanTask(void *pvParameters) {
 void UITask(void *pvParameters) {
     for (;;) {
         handleTouchGestures();
+        handleBootButton();
         if (config.autoBrightness) {
             static unsigned long lastLDR = 0;
             if (millis() - lastLDR > 2000) {
@@ -608,6 +611,7 @@ void setup() {
     pinMode(LED_B_PIN, OUTPUT);
     pinMode(TFT_BL, OUTPUT);
     pinMode(BAT_ADC, INPUT);
+    pinMode(BOOT_BTN, INPUT_PULLUP);
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
 
     initDisplay();
@@ -1108,7 +1112,7 @@ void drawWizardScreen() {
         tft.print("Tiered Priority System with");
         tft.setCursor(20, 125); tft.print("Correlation Detection Engine");
         tft.setCursor(20, 155); tft.setTextColor(TFT_WHITE);
-        tft.print("Tap 'NEXT' to begin setup.");
+        tft.print("Tap NEXT or press BOOT button.");
     } else if (wizardStep == 1) {
         tft.setCursor(20, 60); tft.print("HARDWARE CHECK");
         tft.setCursor(20, 85); tft.printf("Touch: %s", touchAvailable ? "OK" : "ERROR");
@@ -1124,7 +1128,7 @@ void drawWizardScreen() {
         tft.print("Baseline devices will be filtered.");
         tft.setCursor(20, 125); tft.print("Change in CONFIG > Show Baseline.");
         tft.setCursor(20, 155); tft.setTextColor(TFT_WHITE);
-        tft.print("Tap 'FINISH' to start scanning.");
+        tft.print("Tap FINISH or press BOOT button.");
     }
     tft.fillRoundRect(220, 170, 80, 28, 4, COL_ACCENT);
     tft.setTextColor(COL_BG);
@@ -1178,6 +1182,34 @@ void handleTouchGestures() {
             else if (y > 180 && y < 202) config.showBaseline = !config.showBaseline;
             saveConfig();
         }
+    }
+}
+
+// ============================================================
+// BOOT BUTTON HANDLER
+// ============================================================
+
+void handleBootButton() {
+    static unsigned long lastPress = 0;
+    if (digitalRead(BOOT_BTN) != LOW) return;       // Active-low
+    if (millis() - lastPress < 300) return;          // Debounce
+    lastPress = millis();
+    lastInteractionTime = millis();
+
+    if (currentScreen == SCREEN_WIZARD) {
+        // Advance wizard exactly like tapping NEXT/FINISH
+        wizardStep++;
+        if (wizardStep > 2) {
+            config.setupComplete = true;
+            saveConfig();
+            currentScreen = SCREEN_MAIN;
+        }
+    } else {
+        // Cycle through main screens: MAIN -> ALERTS -> SETTINGS -> INFO -> MAIN
+        int s = (int)currentScreen + 1;
+        if (s > (int)SCREEN_INFO) s = (int)SCREEN_MAIN;
+        currentScreen = (Screen)s;
+        scrollOffset = 0;
     }
 }
 
