@@ -566,6 +566,11 @@ uint16_t touchReadChannel(uint8_t cmd) {
 }
 
 bool readTouch(uint16_t *x, uint16_t *y) {
+    // TOUCH_IRQ is active-low: HIGH means no touch, so skip SPI transactions
+    if (digitalRead(TOUCH_IRQ) == HIGH) {
+        return false;
+    }
+
     uint16_t z1 = touchReadChannel(0xB1);
     uint16_t z2 = touchReadChannel(0xC1);
     int pressure = z1 + (4095 - z2);
@@ -636,6 +641,7 @@ void initTouch() {
     pinMode(TOUCH_MOSI, OUTPUT);
     pinMode(TOUCH_MISO, INPUT);
     pinMode(TOUCH_CS, OUTPUT);
+    pinMode(TOUCH_IRQ, INPUT);
     digitalWrite(TOUCH_CS, HIGH);
     digitalWrite(TOUCH_CLK, LOW);
     touchAvailable = true;
