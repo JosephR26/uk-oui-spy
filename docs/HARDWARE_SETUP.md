@@ -157,9 +157,9 @@ Tap the screen during the Setup Wizard. The NEXT button should respond to touch 
 
 ### SD Card Test
 
-1. Insert a FAT32-formatted card with `oui.csv` on it
+1. Insert a FAT32-formatted card (optionally with `priority.json` for enhanced features)
 2. Boot the device
-3. The INFO screen should show the OUI database count
+3. The INFO screen should show the OUI database count (230 entries)
 
 ## Troubleshooting
 

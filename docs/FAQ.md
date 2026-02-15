@@ -70,13 +70,11 @@ When the device detects a Wi-Fi or BLE signal, it extracts the first 3 bytes of 
 
 ### Can I add my own OUIs?
 
-Yes. Edit the `oui.csv` file on your SD card to add new entries:
+Yes. Add a new entry to the `OUI_DATABASE[]` array in `src/oui_database.cpp` and rebuild the firmware:
 
-```csv
-XX:XX:XX,Manufacturer Name,CCTV,HIGH,Police,"Description"
+```cpp
+{"XX:XX:XX", "Manufacturer Name", CAT_CCTV, REL_HIGH, DEPLOY_POLICE, "Description"},
 ```
-
-Or edit `include/oui_database.h` in the source and rebuild the firmware for entries in the static fallback database.
 
 To find OUIs for a specific manufacturer, search:
 - [IEEE OUI Lookup](https://standards.ieee.org/products-programs/regauth/)

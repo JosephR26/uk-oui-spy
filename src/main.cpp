@@ -2,10 +2,10 @@
  * UK-OUI-SPY PRO EDITION v3.0.0
  * Professional UK Surveillance Device Detector
  *
- * Hardware: ESP32-2432S028 (2.8" ILI9341 TFT, capacitive touch)
+ * Hardware: ESP32-2432S028 (2.8" ILI9341 TFT, XPT2046 resistive touch)
  * Features: Tiered Priority Display, Correlation Detection Engine,
- *           FreeRTOS Dual-Core, O(1) OUI Lookup, Secure Logging,
- *           Radar Visualization, Setup Wizard, Power Management.
+ *           WiFi Promiscuous Sniffing, FreeRTOS Dual-Core,
+ *           Radar Visualization, Setup Wizard, Secure Logging.
  */
 
 #define VERSION "3.1.0-PRO"
@@ -172,7 +172,7 @@ int scanInterval = 5000;
 bool scanning = false;
 bool sdCardAvailable = false;
 float batteryVoltage = 0.0;
-bool i2cAvailable = false;
+bool touchAvailable = false;
 int wizardStep = 0;
 int scrollOffset = 0;
 int maxScroll = 0;
@@ -460,6 +460,17 @@ class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
 };
 
 // ============================================================
+// WIFI PROMISCUOUS CALLBACK
+// ============================================================
+
+void onPromiscuousPacket(const uint8_t* mac, int8_t rssi, uint8_t channel) {
+    char macStr[18];
+    snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    checkOUI(String(macStr), rssi, false);
+}
+
+// ============================================================
 // FREERTOS TASKS
 // ============================================================
 
@@ -475,6 +486,10 @@ void ScanTask(void *pvParameters) {
             if (config.enableWiFi) {
                 digitalWrite(LED_G_PIN, HIGH);  // Green = WiFi scan
                 scanWiFi();
+                // Promiscuous mode: catches probe requests, hidden APs, non-broadcasting devices
+                startWiFiPromiscuous(onPromiscuousPacket);
+                scanAllChannels(onPromiscuousPacket, 150);
+                stopWiFiPromiscuous();
                 digitalWrite(LED_G_PIN, LOW);
             }
             scanning = false;
@@ -546,7 +561,7 @@ void setup() {
     // XPT2046 touch calibration
     tft.setTouch(touchCalData);
     Serial.println("XPT2046 touch initialized (SPI, CS=GPIO 33)");
-    i2cAvailable = true;  // Flag reused for "touch available"
+    touchAvailable = true;
     loadConfig();
     currentScreen = config.setupComplete ? SCREEN_MAIN : SCREEN_WIZARD;
 
@@ -1001,7 +1016,7 @@ void drawInfoScreen() {
     drawRow("Active Alerts:", String(activeAlerts.size()));
     drawRow("Detections:", String(detections.size()));
     drawRow("Free Memory:", String(ESP.getFreeHeap() / 1024) + " KB");
-    drawRow("Touch:", i2cAvailable ? "OK" : "ERROR");
+    drawRow("Touch:", touchAvailable ? "OK" : "ERROR");
     drawRow("SD Card:", sdCardAvailable ? "OK" : "NOT FOUND");
 
     drawNavbar();
@@ -1028,7 +1043,7 @@ void drawWizardScreen() {
         tft.print("Tap 'NEXT' to begin setup.");
     } else if (wizardStep == 1) {
         tft.setCursor(20, 60); tft.print("HARDWARE CHECK");
-        tft.setCursor(20, 85); tft.printf("Touch: %s", i2cAvailable ? "OK" : "ERROR");
+        tft.setCursor(20, 85); tft.printf("Touch: %s", touchAvailable ? "OK" : "ERROR");
         tft.setCursor(20, 100); tft.printf("SD Card: %s", sdCardAvailable ? "DETECTED" : "NOT FOUND");
         tft.setCursor(20, 115); tft.printf("OUI DB: %d entries", OUI_DATABASE_SIZE);
         tft.setCursor(20, 130); tft.printf("Priority DB: %d entries", priorityDB.size());

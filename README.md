@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LEGAL.md)
 [![Platform: ESP32](https://img.shields.io/badge/Platform-ESP32-red.svg)](https://www.espressif.com/en/products/socs/esp32)
 [![Version: 3.1.0](https://img.shields.io/badge/Version-3.1.0-green.svg)](CHANGELOG.md)
-[![OUI Database: 280+](https://img.shields.io/badge/OUI_Database-280%2B-orange.svg)](docs/OUI_DATABASE_EXPANSION.md)
+[![OUI Database: 230](https://img.shields.io/badge/OUI_Database-230-orange.svg)](docs/OUI_DATABASE_EXPANSION.md)
 
 <br>
 
@@ -29,7 +29,7 @@ Built on a ~£15 ESP32 board. Fits in your pocket. Runs for 24+ hours on a coin-
 
 The UK has one of the highest densities of surveillance cameras in the world. Most people walk past hundreds of cameras daily without knowing what's collecting their data, who operates it, or whether facial recognition is active.
 
-UK-OUI-SPY PRO makes the invisible visible. Every Wi-Fi and Bluetooth device broadcasts a manufacturer ID (OUI) in its MAC address. This device listens for those broadcasts and cross-references them against a curated database of 280+ UK surveillance equipment manufacturers -- from Hikvision council CCTV to Axon police body cameras to NEC facial recognition systems.
+UK-OUI-SPY PRO makes the invisible visible. Every Wi-Fi and Bluetooth device broadcasts a manufacturer ID (OUI) in its MAC address. This device listens for those broadcasts and cross-references them against a curated database of 230 UK surveillance equipment manufacturers -- from Hikvision council CCTV to Axon police body cameras to NEC facial recognition systems.
 
 No hacking. No interception. Just passive listening to publicly broadcast signals.
 
@@ -103,7 +103,7 @@ Or open the project folder in VS Code and click the PlatformIO Upload button.
 
 ### 2. Prepare SD Card
 
-Format a microSD card as FAT32. Copy `examples/oui.csv` and `examples/priority.json` to the root. Insert into the board.
+Format a microSD card as FAT32. Copy `examples/priority.json` to the root for enhanced priority/correlation features. Insert into the board.
 
 ### 3. Boot & Scan
 
