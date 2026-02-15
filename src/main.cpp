@@ -12,6 +12,7 @@
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
+#include <XPT2046_Touchscreen.h>
 #include <NimBLEDevice.h>
 #include <WiFi.h>
 #include <SD.h>
@@ -41,14 +42,12 @@
 // HARDWARE PIN DEFINITIONS
 // ============================================================
 
-// XPT2046 resistive touch — separate SPI bus from display (bit-bang)
-// On ESP32-2432S028R the touch controller is wired to its own SPI pins,
-// NOT the same bus as the ILI9341 display.
-#define TOUCH_MOSI 32
-#define TOUCH_MISO 39   // Input-only GPIO
-#define TOUCH_CLK  25
-#define TOUCH_CS   33
-#define TOUCH_IRQ  36   // T_IRQ (active LOW on touch, used for deep sleep wakeup)
+// XPT2046 resistive touch on VSPI
+#define XPT2046_IRQ  36
+#define XPT2046_MOSI 32
+#define XPT2046_MISO 39
+#define XPT2046_CLK  25
+#define XPT2046_CS   33
 
 // Backlight polarity (derived from platformio.ini)
 #ifndef TFT_BACKLIGHT_ON
@@ -74,6 +73,8 @@
 #define BOOT_BTN 0    // BOOT button (active LOW, has internal pull-up)
 
 SPIClass sdSPI(VSPI);
+SPIClass touchscreenSPI = SPIClass(VSPI);
+XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
 
 // ============================================================
 // PRIORITY TIER SYSTEM
@@ -220,7 +221,6 @@ void initTouch();
 void initBLE();
 void initWiFi();
 void initSDCard();
-uint16_t touchReadChannel(uint8_t cmd);
 void scanBLE();
 void scanWiFi();
 void checkOUI(String macAddress, int8_t rssi, bool isBLE);
@@ -607,19 +607,8 @@ void UITask(void *pvParameters) {
 // TOUCH CONSTANTS
 // ============================================================
 
-// Touch sampling: take N samples, discard the top and bottom TOUCH_TRIM_COUNT,
-// average the middle (N - 2*TOUCH_TRIM_COUNT).
-static const int TOUCH_SAMPLES        = 8;
-static const int TOUCH_TRIM_COUNT     = 2;
-// Max ADC spread allowed between middle samples; rejects noisy/sliding touches
-static const uint16_t TOUCH_MAX_SPREAD = 200;
-// Minimum pressure threshold to register a touch (z1 + 4095 - z2)
-static const int TOUCH_MIN_PRESSURE   = 500;
-
-// XPT2046 raw ADC range for the CYD 2.8" panel.
-// Adjust these by watching "TOUCH: rawX=... rawY=..." on serial.
-static const long TOUCH_RAW_MIN = 200;
-static const long TOUCH_RAW_MAX = 3900;
+#define SCREEN_WIDTH  320
+#define SCREEN_HEIGHT 240
 
 // Settings screen: toggle rows are drawn at these Y origins (from drawSettingsScreen)
 // and the hitbox extends from ROW_Y - SETTINGS_ROW_PAD to ROW_Y + SETTINGS_ROW_HEIGHT - SETTINGS_ROW_PAD.
@@ -629,114 +618,27 @@ static const int SETTINGS_HIT_X_MIN   = 20;
 static const int SETTINGS_HIT_X_MAX   = 260;
 
 // ============================================================
-// TOUCH DRIVER (XPT2046 via bit-bang SPI on dedicated bus)
-// The CYD board wires the XPT2046 to separate SPI pins
-// (MOSI=32, MISO=39, CLK=25, CS=33), NOT the display bus.
+// TOUCH DRIVER (XPT2046 via Paul Stoffregen library on VSPI)
 // ============================================================
-
-// XPT2046 SPI Mode 0: data clocked in on rising edge, out on falling edge.
-// We bit-bang because the touch controller sits on its own GPIO set (not HSPI/VSPI).
-
-void touchClockCycle() {
-    digitalWrite(TOUCH_CLK, HIGH);
-    delayMicroseconds(2);
-    digitalWrite(TOUCH_CLK, LOW);
-    delayMicroseconds(2);
-}
-
-uint16_t touchReadChannel(uint8_t cmd) {
-    digitalWrite(TOUCH_CS, LOW);
-    delayMicroseconds(2);
-
-    // Send 8-bit command (MSB first), clock data in on rising edge
-    for (uint8_t i = 0; i < 8; i++) {
-        digitalWrite(TOUCH_MOSI, (cmd & 0x80) ? HIGH : LOW);
-        cmd <<= 1;
-        touchClockCycle();
-    }
-
-    // One extra clock for the busy/conversion cycle
-    touchClockCycle();
-
-    // Read 12-bit result: XPT2046 shifts data out on falling CLK edge,
-    // so we sample MISO after CLK goes LOW.
-    uint16_t result = 0;
-    for (uint8_t i = 0; i < 12; i++) {
-        digitalWrite(TOUCH_CLK, HIGH);
-        delayMicroseconds(2);
-        digitalWrite(TOUCH_CLK, LOW);
-        delayMicroseconds(2);
-        result <<= 1;
-        if (digitalRead(TOUCH_MISO)) result |= 1;
-    }
-
-    // Drain remaining 3 trailing bits to complete the 16-clock read
-    for (uint8_t i = 0; i < 3; i++) {
-        touchClockCycle();
-    }
-
-    digitalWrite(TOUCH_CS, HIGH);
-    digitalWrite(TOUCH_MOSI, LOW);
-    return result;
-}
 
 bool readTouch(uint16_t *x, uint16_t *y) {
     if (!touchAvailable) return false;
 
-    // TOUCH_IRQ is active-low: HIGH means no touch, so skip SPI transactions
-    if (digitalRead(TOUCH_IRQ) == HIGH) {
-        return false;
+    if (touchscreen.tirqTouched() && touchscreen.touched()) {
+        TS_Point p = touchscreen.getPoint();
+
+        // Map raw coordinates to screen pixels
+        *x = map(p.x, 200, 3700, 0, SCREEN_WIDTH);
+        *y = map(p.y, 240, 3800, 0, SCREEN_HEIGHT);
+
+        *x = constrain(*x, 0, SCREEN_WIDTH - 1);
+        *y = constrain(*y, 0, SCREEN_HEIGHT - 1);
+
+        Serial.printf("TOUCH: raw(%d,%d,%d) mapped(%u,%u)\n", p.x, p.y, p.z, *x, *y);
+        lastInteractionTime = millis();
+        return true;
     }
-
-    // Read pressure to confirm a real touch
-    uint16_t z1 = touchReadChannel(0xB1);
-    uint16_t z2 = touchReadChannel(0xC1);
-    int pressure = z1 + (4095 - z2);
-    if (pressure < TOUCH_MIN_PRESSURE) return false;
-
-    // Robust multi-sample with trimmed mean.
-    // Take TOUCH_SAMPLES samples, sort, discard top/bottom TOUCH_TRIM_COUNT,
-    // average the middle.
-    uint16_t sampX[TOUCH_SAMPLES], sampY[TOUCH_SAMPLES];
-    for (int s = 0; s < TOUCH_SAMPLES; s++) {
-        sampX[s] = touchReadChannel(0x91);
-        sampY[s] = touchReadChannel(0xD1);
-    }
-
-    // Final read with PD=00 to re-enable PENIRQ for the IRQ pin
-    touchReadChannel(0x90);
-
-    // Sort for median/trimmed-mean
-    std::sort(sampX, sampX + TOUCH_SAMPLES);
-    std::sort(sampY, sampY + TOUCH_SAMPLES);
-
-    // Reject if the middle samples still have excessive spread
-    // — indicates finger is sliding or electrical noise, not a clean tap
-    if ((sampX[TOUCH_SAMPLES - TOUCH_TRIM_COUNT - 1] - sampX[TOUCH_TRIM_COUNT]) > TOUCH_MAX_SPREAD ||
-        (sampY[TOUCH_SAMPLES - TOUCH_TRIM_COUNT - 1] - sampY[TOUCH_TRIM_COUNT]) > TOUCH_MAX_SPREAD) {
-        return false;
-    }
-
-    // Trimmed mean of the middle samples
-    uint32_t avgX = 0, avgY = 0;
-    for (int i = TOUCH_TRIM_COUNT; i < TOUCH_SAMPLES - TOUCH_TRIM_COUNT; i++) {
-        avgX += sampX[i];
-        avgY += sampY[i];
-    }
-    avgX /= (TOUCH_SAMPLES - 2 * TOUCH_TRIM_COUNT);
-    avgY /= (TOUCH_SAMPLES - 2 * TOUCH_TRIM_COUNT);
-
-    Serial.printf("TOUCH: pressure=%d rawX=%lu rawY=%lu\n", pressure, avgX, avgY);
-
-    // Map to landscape screen coordinates (rotation=1, 320x240).
-    // XPT2046 Y channel → screen X, X channel → screen Y (inverted for landscape).
-    // Adjust TOUCH_RAW_MIN / TOUCH_RAW_MAX by watching serial output.
-    *x = constrain(map((long)avgY, TOUCH_RAW_MIN, TOUCH_RAW_MAX, 0, 319), 0, 319);
-    *y = constrain(map((long)avgX, TOUCH_RAW_MAX, TOUCH_RAW_MIN, 0, 239), 0, 239);
-
-    Serial.printf("TOUCH: mapped x=%u y=%u\n", *x, *y);
-    lastInteractionTime = millis();
-    return true;
+    return false;
 }
 
 // ============================================================
@@ -818,24 +720,11 @@ void loop() { vTaskDelay(pdMS_TO_TICKS(1000)); }
 void initDisplay() { tft.init(); tft.setRotation(1); tft.fillScreen(COL_BG); }
 
 void initTouch() {
-    pinMode(TOUCH_CLK, OUTPUT);
-    pinMode(TOUCH_MOSI, OUTPUT);
-    pinMode(TOUCH_MISO, INPUT);
-    pinMode(TOUCH_CS, OUTPUT);
-    // GPIO 36 is input-only on ESP32 (GPIOs 34-39 have no internal pull-up);
-    // an external pull-up is required for a defined idle-HIGH state.
-    pinMode(TOUCH_IRQ, INPUT);
-    digitalWrite(TOUCH_CS, HIGH);
-    digitalWrite(TOUCH_CLK, LOW);
+    touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
+    touchscreen.begin(touchscreenSPI);
+    touchscreen.setRotation(1);
     touchAvailable = true;
-    Serial.println("XPT2046 touch initialized (bit-bang SPI: MOSI=32 MISO=39 CLK=25 CS=33)");
-
-    // Self-test: read X channel to verify SPI comms (non-zero = chip responding)
-    uint16_t testVal = touchReadChannel(0x91);
-    Serial.printf("  Touch self-test: X raw=%u, IRQ=%s\n",
-                  testVal, digitalRead(TOUCH_IRQ) == LOW ? "LOW(touched)" : "HIGH(idle)");
-    // Send power-down command to re-enable PENIRQ
-    touchReadChannel(0x90);
+    Serial.println("XPT2046 touch initialized (VSPI: MOSI=32 MISO=39 CLK=25 CS=33 IRQ=36)");
 }
 
 void initSDCard() {
@@ -1696,6 +1585,6 @@ void enterDeepSleep() {
     digitalWrite(LED_PIN, LOW);
     digitalWrite(LED_G_PIN, LOW);
     digitalWrite(LED_B_PIN, LOW);
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)TOUCH_IRQ, 0);
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)XPT2046_IRQ, 0);
     esp_deep_sleep_start();
 }
