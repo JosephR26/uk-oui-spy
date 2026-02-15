@@ -566,6 +566,8 @@ uint16_t touchReadChannel(uint8_t cmd) {
 }
 
 bool readTouch(uint16_t *x, uint16_t *y) {
+    if (!touchAvailable) return false;
+
     // TOUCH_IRQ is active-low: HIGH means no touch, so skip SPI transactions
     if (digitalRead(TOUCH_IRQ) == HIGH) {
         return false;
@@ -641,6 +643,8 @@ void initTouch() {
     pinMode(TOUCH_MOSI, OUTPUT);
     pinMode(TOUCH_MISO, INPUT);
     pinMode(TOUCH_CS, OUTPUT);
+    // GPIO 36 is input-only on ESP32 (GPIOs 34-39 have no internal pull-up);
+    // an external pull-up is required for a defined idle-HIGH state.
     pinMode(TOUCH_IRQ, INPUT);
     digitalWrite(TOUCH_CS, HIGH);
     digitalWrite(TOUCH_CLK, LOW);
