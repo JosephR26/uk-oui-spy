@@ -552,8 +552,7 @@ void setup() {
 
     initSDCard();
 
-    // Load OUI database (SD first, then static fallback)
-    if (!loadOUIDatabaseFromSD("/oui.csv")) initializeStaticDatabase();
+    Serial.printf("OUI database: %d entries\n", OUI_DATABASE_SIZE);
 
     // Load priority database (SD first, then static fallback)
     if (!loadPriorityDB("/priority.json")) initializeStaticPriorityDB();
@@ -598,15 +597,15 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
     String oui = mac.substring(0, 8);
 
     // Check OUI database first
-    auto ouiIt = ouiLookup.find(toOuiKey(oui));
-    if (ouiIt == ouiLookup.end()) return;  // Not a known surveillance OUI
+    const OUIEntry* entry = findOUI(oui);
+    if (!entry) return;  // Not a known surveillance OUI
 
     // Build detection
     Detection det;
     det.macAddress = mac;
-    det.manufacturer = ouiIt->second->manufacturer;
-    det.category = ouiIt->second->category;
-    det.relevance = ouiIt->second->relevance;
+    det.manufacturer = entry->manufacturer;
+    det.category = entry->category;
+    det.relevance = entry->relevance;
     det.rssi = rssi;
     det.timestamp = millis();
     det.firstSeen = millis();
@@ -996,7 +995,7 @@ void drawInfoScreen() {
 
     drawRow("Firmware:", VERSION);
     drawRow("Battery:", String(batteryVoltage, 2) + " V");
-    drawRow("OUI Database:", String(dynamicDatabase.size()) + " entries");
+    drawRow("OUI Database:", String(OUI_DATABASE_SIZE) + " entries");
     drawRow("Priority DB:", String(priorityDB.size()) + " entries");
     drawRow("Corr. Rules:", String(correlationRules.size()) + " rules");
     drawRow("Active Alerts:", String(activeAlerts.size()));
@@ -1031,7 +1030,7 @@ void drawWizardScreen() {
         tft.setCursor(20, 60); tft.print("HARDWARE CHECK");
         tft.setCursor(20, 85); tft.printf("Touch: %s", i2cAvailable ? "OK" : "ERROR");
         tft.setCursor(20, 100); tft.printf("SD Card: %s", sdCardAvailable ? "DETECTED" : "NOT FOUND");
-        tft.setCursor(20, 115); tft.printf("OUI DB: %d entries", dynamicDatabase.size());
+        tft.setCursor(20, 115); tft.printf("OUI DB: %d entries", OUI_DATABASE_SIZE);
         tft.setCursor(20, 130); tft.printf("Priority DB: %d entries", priorityDB.size());
         tft.setCursor(20, 145); tft.printf("Corr. Rules: %d", correlationRules.size());
     } else {
