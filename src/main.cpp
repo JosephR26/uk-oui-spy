@@ -8,7 +8,7 @@
  *           Radar Visualization, Setup Wizard, Secure Logging.
  */
 
-#define VERSION "3.1.0-PRO"
+#define VERSION "3.2.0-PRO"
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -16,17 +16,26 @@
 #include <WiFi.h>
 #include <SD.h>
 #include <SPI.h>
-// Wire.h removed — XPT2046 touch uses SPI (handled by TFT_eSPI)
 #include <vector>
 #include <algorithm>
 #include <map>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <DNSServer.h>
 #include "esp_sleep.h"
 #include "oui_database.h"
 #include "wifi_promiscuous.h"
+#include "web_portal.h"
 #include "mbedtls/aes.h"
+
+// Web Portal AP Configuration
+#define AP_SSID     "OUI-SPY-PRO"
+#define AP_PASS     "spypro2026"
+#define AP_CHANNEL  6
+#define AP_MAX_CONN 4
 
 // ============================================================
 // HARDWARE PIN DEFINITIONS
@@ -154,6 +163,7 @@ struct Config {
     bool enableLogging = true;
     bool secureLogging = false;
     bool showBaseline = false;  // Filter baseline by default
+    bool enableWebPortal = true;
     int brightness = 255;
     bool autoBrightness = true;
     char encryptionKey[17] = "UK-OUI-SPY-2026";
@@ -174,6 +184,9 @@ std::vector<CorrelationRule> correlationRules;
 std::vector<CorrelationAlert> activeAlerts;
 std::map<String, PriorityEntry*> priorityLookup;  // OUI -> PriorityEntry
 SemaphoreHandle_t xDetectionMutex;
+AsyncWebServer webServer(80);
+DNSServer dnsServer;
+bool webPortalActive = false;
 
 const int MAX_DETECTIONS = 50;
 const int MAX_ALERTS = 5;
@@ -191,6 +204,12 @@ int maxScroll = 0;
 // Display dirty-flag system — only redraw when state changes.
 // Eliminates the full-screen clear every 30 ms that causes flicker.
 volatile bool displayDirty = true;
+
+// Scan statistics for display feedback
+volatile int lastBLECount = 0;
+volatile int lastWiFiCount = 0;
+volatile int totalScanned = 0;
+volatile int totalMatched = 0;
 
 // ============================================================
 // FUNCTION PROTOTYPES
@@ -230,6 +249,7 @@ void alertLED(int priority);
 uint16_t getTierColor(int priority);
 const char* getTierLabel(int priority);
 int getTierStars(int priority);
+void setupWebServer();
 
 // ============================================================
 // PRIORITY DATABASE LOADER
@@ -530,6 +550,9 @@ void ScanTask(void *pvParameters) {
 
             // Run correlation engine after each scan cycle
             runCorrelationEngine();
+
+            Serial.printf("[SCAN] Cycle complete: BLE=%d WiFi=%d | Total=%d matched=%d | Detections=%d\n",
+                          lastBLECount, lastWiFiCount, totalScanned, totalMatched, detections.size());
         }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
@@ -565,6 +588,11 @@ void UITask(void *pvParameters) {
             lastPeriodicRefresh = millis();
         }
 
+        // Process DNS for captive portal
+        if (webPortalActive) {
+            dnsServer.processNextRequest();
+        }
+
         updateDisplay();
 
         if (millis() - lastInteractionTime > (unsigned long)(config.sleepTimeout * 1000)) {
@@ -595,8 +623,8 @@ static const long TOUCH_RAW_MAX = 3900;
 
 // Settings screen: toggle rows are drawn at these Y origins (from drawSettingsScreen)
 // and the hitbox extends from ROW_Y - SETTINGS_ROW_PAD to ROW_Y + SETTINGS_ROW_HEIGHT - SETTINGS_ROW_PAD.
-static const int SETTINGS_ROW_Y[]     = {45, 72, 99, 126, 153, 180};
-static const int SETTINGS_ROW_HEIGHT  = 27;
+static const int SETTINGS_ROW_Y[]     = {42, 66, 90, 114, 138, 162, 186};
+static const int SETTINGS_ROW_HEIGHT  = 24;
 static const int SETTINGS_HIT_X_MIN   = 20;
 static const int SETTINGS_HIT_X_MAX   = 260;
 
@@ -815,16 +843,37 @@ void initSDCard() {
     sdCardAvailable = SD.begin(SD_CS, sdSPI);
 }
 void initBLE() { NimBLEDevice::init("UK-OUI-SPY"); }
-void initWiFi() { WiFi.mode(WIFI_STA); WiFi.disconnect(); }
+void initWiFi() {
+    if (config.enableWebPortal) {
+        WiFi.mode(WIFI_AP_STA);
+        WiFi.softAP(AP_SSID, AP_PASS, AP_CHANNEL, 0, AP_MAX_CONN);
+        WiFi.disconnect();  // Disconnect STA side (not connected to any AP)
+        dnsServer.start(53, "*", WiFi.softAPIP());
+        setupWebServer();
+        webPortalActive = true;
+        Serial.printf("[WEB] AP: %s  IP: %s\n", AP_SSID, WiFi.softAPIP().toString().c_str());
+    } else {
+        WiFi.mode(WIFI_STA);
+        WiFi.disconnect();
+    }
+}
 
 void scanBLE() {
     NimBLEScan* pBLEScan = NimBLEDevice::getScan();
     pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks(), true);
     pBLEScan->start(2, false);
+    int found = pBLEScan->getResults().getCount();
+    lastBLECount = found;
+    totalScanned += found;
+    Serial.printf("[SCAN] BLE: %d devices found\n", found);
+    pBLEScan->clearResults();
 }
 
 void scanWiFi() {
     int n = WiFi.scanNetworks(false, true, false, 100);
+    lastWiFiCount = max(n, 0);
+    totalScanned += max(n, 0);
+    Serial.printf("[SCAN] WiFi: %d networks found\n", n);
     for (int i = 0; i < n; ++i) checkOUI(WiFi.BSSIDstr(i), WiFi.RSSI(i), false);
 }
 
@@ -839,7 +888,10 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
 
     // Check OUI database first
     const OUIEntry* entry = findOUI(oui);
-    if (!entry) return;  // Not a known surveillance OUI
+    if (!entry) return;
+
+    totalMatched++;
+    Serial.printf("[OUI] MATCH: %s -> %s\n", oui.c_str(), entry->manufacturer);
 
     // Build detection
     Detection det;
@@ -910,6 +962,147 @@ void addDetection(Detection det) {
 }
 
 // ============================================================
+// WEB PORTAL
+// ============================================================
+
+void setupWebServer() {
+    // Serve dashboard
+    webServer.on("/", HTTP_GET, [](AsyncWebServerRequest *req){
+        req->send_P(200, "text/html", WEB_DASHBOARD);
+    });
+    // Captive portal redirects
+    webServer.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *req){ req->redirect("/"); });
+    webServer.on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *req){ req->redirect("/"); });
+    webServer.on("/connecttest.txt", HTTP_GET, [](AsyncWebServerRequest *req){ req->redirect("/"); });
+
+    // API: Get detections
+    webServer.on("/api/detections", HTTP_GET, [](AsyncWebServerRequest *req){
+        DynamicJsonDocument doc(8192);
+        xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
+        auto snap = detections;
+        xSemaphoreGive(xDetectionMutex);
+        doc["total"] = snap.size();
+        int highCount = 0;
+        JsonArray arr = doc.createNestedArray("detections");
+        for (auto &d : snap) {
+            if (d.priority >= PRIORITY_HIGH) highCount++;
+            JsonObject obj = arr.createNestedObject();
+            obj["mac"] = d.macAddress;
+            obj["manufacturer"] = d.manufacturer;
+            obj["category"] = getCategoryName(d.category);
+            obj["relevance"] = getRelevanceName(d.relevance);
+            obj["context"] = d.context;
+            obj["rssi"] = d.rssi;
+            obj["isBLE"] = d.isBLE;
+            obj["priority"] = d.priority;
+            obj["threat"] = d.priority * 20;
+            obj["sightings"] = d.sightings;
+            obj["stationary"] = (d.sightings > 3);
+        }
+        doc["highCount"] = highCount;
+        String response;
+        serializeJson(doc, response);
+        req->send(200, "application/json", response);
+    });
+
+    // API: Get system status
+    webServer.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *req){
+        DynamicJsonDocument doc(1024);
+        doc["firmware"] = VERSION;
+        int bp = constrain(map((int)(batteryVoltage * 100), 330, 420, 0, 100), 0, 100);
+        doc["battery"] = bp;
+        doc["freeHeap"] = ESP.getFreeHeap() / 1024;
+        doc["ouiCount"] = OUI_DATABASE_SIZE;
+        doc["priorityCount"] = priorityDB.size();
+        doc["sdCard"] = sdCardAvailable;
+        doc["touch"] = touchAvailable;
+        doc["scanning"] = scanning;
+        doc["totalScanned"] = totalScanned;
+        doc["totalMatched"] = totalMatched;
+        doc["packets"] = totalScanned;
+        unsigned long up = millis() / 1000;
+        char upStr[16];
+        snprintf(upStr, sizeof(upStr), "%02d:%02d:%02d",
+                 (int)(up / 3600), (int)((up % 3600) / 60), (int)(up % 60));
+        doc["uptime"] = upStr;
+        doc["webClients"] = WiFi.softAPgetStationNum();
+        doc["alerts"] = activeAlerts.size();
+        String response;
+        serializeJson(doc, response);
+        req->send(200, "application/json", response);
+    });
+
+    // API: Get config
+    webServer.on("/api/config", HTTP_GET, [](AsyncWebServerRequest *req){
+        DynamicJsonDocument doc(512);
+        doc["ble"] = config.enableBLE;
+        doc["wifi"] = config.enableWiFi;
+        doc["promiscuous"] = config.enableWiFi;
+        doc["logging"] = config.enableLogging;
+        doc["secure"] = config.secureLogging;
+        doc["autoBrightness"] = config.autoBrightness;
+        doc["showBaseline"] = config.showBaseline;
+        doc["webPortal"] = config.enableWebPortal;
+        doc["brightness"] = config.brightness;
+        String response;
+        serializeJson(doc, response);
+        req->send(200, "application/json", response);
+    });
+
+    // API: Update config
+    webServer.on("/api/config", HTTP_POST, [](AsyncWebServerRequest *req){},
+        NULL,
+        [](AsyncWebServerRequest *req, uint8_t *data, size_t len, size_t index, size_t total){
+            DynamicJsonDocument doc(512);
+            deserializeJson(doc, data, len);
+            if (doc.containsKey("ble")) config.enableBLE = doc["ble"];
+            if (doc.containsKey("wifi")) config.enableWiFi = doc["wifi"];
+            if (doc.containsKey("logging")) config.enableLogging = doc["logging"];
+            if (doc.containsKey("secure")) config.secureLogging = doc["secure"];
+            if (doc.containsKey("autoBrightness")) config.autoBrightness = doc["autoBrightness"];
+            if (doc.containsKey("showBaseline")) config.showBaseline = doc["showBaseline"];
+            if (doc.containsKey("brightness")) {
+                config.brightness = doc["brightness"];
+                setBrightness(config.brightness);
+            }
+            saveConfig();
+            displayDirty = true;
+            req->send(200, "application/json", "{\"status\":\"ok\"}");
+        }
+    );
+
+    // API: Get raw logs (last 50 lines)
+    webServer.on("/api/logs", HTTP_GET, [](AsyncWebServerRequest *req){
+        if (!sdCardAvailable || !SD.exists("/detections.csv")) {
+            req->send(200, "text/plain", "No log data available.");
+            return;
+        }
+        File f = SD.open("/detections.csv");
+        if (!f) { req->send(500, "text/plain", "Error reading log."); return; }
+        String content = "";
+        int lines = 0;
+        while (f.available() && lines < 50) {
+            content += f.readStringUntil('\n') + "\n";
+            lines++;
+        }
+        f.close();
+        req->send(200, "text/plain", content);
+    });
+
+    // API: Download CSV
+    webServer.on("/api/logs/download", HTTP_GET, [](AsyncWebServerRequest *req){
+        if (!sdCardAvailable || !SD.exists("/detections.csv")) {
+            req->send(404, "text/plain", "No log file found.");
+            return;
+        }
+        req->send(SD, "/detections.csv", "text/csv", true);
+    });
+
+    webServer.begin();
+    Serial.println("[WEB] Web server started");
+}
+
+// ============================================================
 // DISPLAY SYSTEM
 // ============================================================
 
@@ -934,13 +1127,24 @@ void drawHeader(const char* title) {
     tft.setCursor(10, 6);
     tft.print(title);
 
-    // Scanning indicator
+    // Scanning indicator + last scan counts
+    tft.setTextSize(1);
     if (scanning) {
-        tft.fillCircle(240, 14, 4, COL_ACCENT);
-        tft.setTextSize(1);
-        tft.setCursor(248, 10);
+        tft.fillCircle(210, 14, 4, COL_ACCENT);
+        tft.setCursor(218, 10);
         tft.setTextColor(COL_ACCENT);
         tft.print("SCAN");
+    } else if (totalScanned > 0) {
+        tft.setTextColor(COL_DIMTEXT);
+        tft.setCursor(200, 10);
+        tft.printf("B:%d W:%d", lastBLECount, lastWiFiCount);
+    }
+
+    // Web portal indicator
+    if (webPortalActive) {
+        tft.setTextColor(TFT_GREEN);
+        tft.setCursor(255, 10);
+        tft.print("WEB");
     }
 
     // Battery icon
@@ -1077,8 +1281,18 @@ void drawMainScreen() {
     if (snapshot.empty()) {
         tft.setTextSize(1);
         tft.setTextColor(COL_DIMTEXT);
-        tft.setCursor(80, 110);
-        tft.print("Scanning for devices...");
+        if (totalScanned > 0) {
+            tft.setCursor(40, 95);
+            tft.print("No surveillance devices detected.");
+            tft.setCursor(45, 115);
+            tft.printf("%d devices scanned, %d matched", totalScanned, totalMatched);
+            tft.setTextColor(0x4208);
+            tft.setCursor(50, 140);
+            tft.print("This is normal in most areas.");
+        } else {
+            tft.setCursor(90, 110);
+            tft.print("Starting scan...");
+        }
     }
 
     drawNavbar();
@@ -1175,6 +1389,21 @@ void drawRadarScreen() {
         }
     }
 
+    // Empty state for radar
+    bool hasVisibleDevices = false;
+    for (auto& det : snapshot) {
+        if (config.showBaseline || det.priority > PRIORITY_BASELINE) {
+            hasVisibleDevices = true;
+            break;
+        }
+    }
+    if (!hasVisibleDevices) {
+        tft.setTextSize(1);
+        tft.setTextColor(COL_DIMTEXT);
+        tft.setCursor(cx - 45, cy + 45);
+        tft.print("No devices in range");
+    }
+
     // Correlation alert overlay on radar
     if (!activeAlerts.empty()) {
         tft.setTextSize(1);
@@ -1195,12 +1424,13 @@ void drawSettingsScreen() {
     tft.startWrite();
     tft.fillScreen(COL_BG);
     drawHeader("CONFIGURATION");
-    drawToggle(20, 45, config.enableBLE, "BLE Scanning");
-    drawToggle(20, 72, config.enableWiFi, "WiFi Scanning");
-    drawToggle(20, 99, config.enableLogging, "SD Logging");
-    drawToggle(20, 126, config.secureLogging, "Secure (AES)");
-    drawToggle(20, 153, config.autoBrightness, "Auto-Brightness");
-    drawToggle(20, 180, config.showBaseline, "Show Baseline");
+    drawToggle(20, 42, config.enableBLE, "BLE Scanning");
+    drawToggle(20, 66, config.enableWiFi, "WiFi Scanning");
+    drawToggle(20, 90, config.enableLogging, "SD Logging");
+    drawToggle(20, 114, config.secureLogging, "Secure (AES)");
+    drawToggle(20, 138, config.autoBrightness, "Auto-Brightness");
+    drawToggle(20, 162, config.showBaseline, "Show Baseline");
+    drawToggle(20, 186, config.enableWebPortal, "Web Portal");
     drawNavbar();
     tft.endWrite();
 }
@@ -1247,8 +1477,14 @@ void drawInfoScreen() {
     drawRow("Active Alerts:", String(activeAlerts.size()));
     drawRow("Detections:", String(detections.size()));
     drawRow("Free Memory:", String(ESP.getFreeHeap() / 1024) + " KB");
+    drawRow("Scanned:", String(totalScanned) + " total, " + String(totalMatched) + " matched");
     drawRow("Touch:", touchAvailable ? "OK" : "ERROR");
     drawRow("SD Card:", sdCardAvailable ? "OK" : "NOT FOUND");
+    if (webPortalActive) {
+        drawRow("Web Portal:", String(AP_SSID) + " (" + String(WiFi.softAPgetStationNum()) + ")");
+    } else {
+        drawRow("Web Portal:", "Disabled");
+    }
 
     drawNavbar();
     tft.endWrite();
@@ -1304,10 +1540,10 @@ void handleTouchGestures() {
     static unsigned long lastTouch = 0;
     uint16_t x, y;
     if (!readTouch(&x, &y)) return;
-    if (millis() - lastTouch < 250) return;  // Debounce
+    if (millis() - lastTouch < 150) return;  // Debounce
     lastTouch = millis();
 
-    if (y > 210) {
+    if (y >= 208) {
         // Navbar tap
         int newScreen = x / 80;
         if (newScreen >= 0 && newScreen <= 3) {
@@ -1329,9 +1565,10 @@ void handleTouchGestures() {
         if (x > SETTINGS_HIT_X_MIN && x < SETTINGS_HIT_X_MAX) {
             bool* toggles[] = {
                 &config.enableBLE, &config.enableWiFi, &config.enableLogging,
-                &config.secureLogging, &config.autoBrightness, &config.showBaseline
+                &config.secureLogging, &config.autoBrightness, &config.showBaseline,
+                &config.enableWebPortal
             };
-            for (int i = 0; i < 6; i++) {
+            for (int i = 0; i < 7; i++) {
                 int rowTop = SETTINGS_ROW_Y[i] - 10;
                 int rowBot = SETTINGS_ROW_Y[i] + SETTINGS_ROW_HEIGHT - 5;
                 if (y > rowTop && y < rowBot) {
@@ -1426,6 +1663,7 @@ void saveConfig() {
     preferences.putBool("secure", config.secureLogging);
     preferences.putBool("auto", config.autoBrightness);
     preferences.putBool("baseline", config.showBaseline);
+    preferences.putBool("webp", config.enableWebPortal);
     preferences.end();
 }
 
@@ -1438,6 +1676,7 @@ void loadConfig() {
     config.secureLogging = preferences.getBool("secure", false);
     config.autoBrightness = preferences.getBool("auto", true);
     config.showBaseline = preferences.getBool("baseline", false);
+    config.enableWebPortal = preferences.getBool("webp", true);
     preferences.end();
 }
 
