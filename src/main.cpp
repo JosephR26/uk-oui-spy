@@ -369,6 +369,20 @@ void initializeStaticPriorityDB() {
 // CORRELATION ENGINE
 // ============================================================
 
+// Lightweight change-detection hash over alert content fields (djb2-based).
+// Excludes timestamp — it changes every cycle and doesn't affect rendered content.
+static uint32_t hashAlerts(const std::vector<CorrelationAlert>& alerts) {
+    uint32_t h = 5381;
+    for (const auto& a : alerts) {
+        for (char c : a.name)        h = h * 33 + (uint8_t)c;
+        for (char c : a.description) h = h * 33 + (uint8_t)c;
+        for (char c : a.alertLevel)  h = h * 33 + (uint8_t)c;
+        h = h * 33 + 0xFF; // separator between alerts
+    }
+    h = h * 33 + (uint32_t)alerts.size();
+    return h;
+}
+
 void runCorrelationEngine() {
     // Count devices per correlation group
     std::map<String, int> groupCounts;
@@ -380,8 +394,8 @@ void runCorrelationEngine() {
     }
     xSemaphoreGive(xDetectionMutex);
 
-    // Evaluate each rule
-    activeAlerts.clear();
+    // Build new alert set into a temporary vector
+    std::vector<CorrelationAlert> newAlerts;
     for (auto& rule : correlationRules) {
         int matchingDevices = 0;
         for (auto& group : rule.requiredGroups) {
@@ -396,12 +410,21 @@ void runCorrelationEngine() {
             alert.description = rule.description;
             alert.alertLevel = rule.alertLevel;
             alert.timestamp = millis();
-            activeAlerts.push_back(alert);
+            newAlerts.push_back(alert);
+        }
+    }
 
-            // Trigger LED alerts for critical correlations
-            if (rule.alertLevel == "CRITICAL") {
+    // Only update and trigger LEDs if the alert set actually changed
+    static uint32_t prevHash = 0;
+    uint32_t newHash = hashAlerts(newAlerts);
+    if (newHash != prevHash) {
+        prevHash = newHash;
+        activeAlerts = std::move(newAlerts);
+
+        for (const auto& alert : activeAlerts) {
+            if (alert.alertLevel == "CRITICAL") {
                 alertLED(5);
-            } else if (rule.alertLevel == "HIGH") {
+            } else if (alert.alertLevel == "HIGH") {
                 alertLED(4);
             }
         }
@@ -553,6 +576,10 @@ void UITask(void *pvParameters) {
 // (MOSI=32, MISO=39, CLK=25, CS=33), NOT the display bus.
 // ============================================================
 
+// Number of XPT2046 ADC samples to average per touch read.
+constexpr int TOUCH_SAMPLES = 4;
+static_assert(TOUCH_SAMPLES > 0, "TOUCH_SAMPLES must be > 0 to avoid division by zero");
+
 // XPT2046 SPI Mode 0: data clocked in on rising edge, out on falling edge.
 // We bit-bang because the touch controller sits on its own GPIO set (not HSPI/VSPI).
 
@@ -619,7 +646,7 @@ bool readTouch(uint16_t *x, uint16_t *y) {
     // X command: 0x91 = addr 001, 12-bit, diff, PD 01
     // Y command: 0xD1 = addr 101, 12-bit, diff, PD 01
     uint32_t sumX = 0, sumY = 0;
-    for (int s = 0; s < 4; s++) {
+    for (int s = 0; s < TOUCH_SAMPLES; s++) {
         sumX += touchReadChannel(0x91);
         sumY += touchReadChannel(0xD1);
     }
@@ -628,11 +655,11 @@ bool readTouch(uint16_t *x, uint16_t *y) {
     touchReadChannel(0x90);  // X with PD=00: power down, enable PENIRQ
 
     Serial.printf("TOUCH: z1=%u z2=%u pressure=%d rawX=%lu rawY=%lu\n",
-                  z1, z2, pressure, sumX / 4, sumY / 4);
+                  z1, z2, pressure, sumX / TOUCH_SAMPLES, sumY / TOUCH_SAMPLES);
 
     // Map to landscape screen coordinates (rotation=1, 320x240)
-    *x = constrain(map(sumY / 4, 200, 3900, 0, 319), 0, 319);
-    *y = constrain(map(sumX / 4, 3900, 200, 0, 239), 0, 239);
+    *x = constrain(map(sumY / TOUCH_SAMPLES, 200, 3900, 0, 319), 0, 319);
+    *y = constrain(map(sumX / TOUCH_SAMPLES, 3900, 200, 0, 239), 0, 239);
 
     Serial.printf("TOUCH: mapped x=%u y=%u\n", *x, *y);
     lastInteractionTime = millis();
@@ -1114,16 +1141,33 @@ void drawRadarScreen() {
 // SETTINGS SCREEN
 // ============================================================
 
+// Layout constants for settings toggle rows
+constexpr int SETTINGS_FIRST_ROW_Y   = 45;
+constexpr int SETTINGS_ROW_SPACING   = 27;
+constexpr int SETTINGS_TOGGLE_HEIGHT = 22;
+constexpr int SETTINGS_TOGGLE_X_MIN  = 150;  // hitbox left edge
+constexpr int SETTINGS_TOGGLE_X_MAX  = 220;  // hitbox right edge
+constexpr int SETTINGS_TOGGLE_X      = 20;   // drawToggle x parameter
+
+struct SettingsRow { bool* value; const char* label; };
+static const SettingsRow SETTINGS_ROWS[] = {
+    { &config.enableBLE,       "BLE Scanning"    },
+    { &config.enableWiFi,      "WiFi Scanning"   },
+    { &config.enableLogging,   "SD Logging"      },
+    { &config.secureLogging,   "Secure (AES)"    },
+    { &config.autoBrightness,  "Auto-Brightness" },
+    { &config.showBaseline,    "Show Baseline"   },
+};
+constexpr int SETTINGS_ROW_COUNT = sizeof(SETTINGS_ROWS) / sizeof(SETTINGS_ROWS[0]);
+
 void drawSettingsScreen() {
     tft.startWrite();
     tft.fillScreen(COL_BG);
     drawHeader("CONFIGURATION");
-    drawToggle(20, 45, config.enableBLE, "BLE Scanning");
-    drawToggle(20, 72, config.enableWiFi, "WiFi Scanning");
-    drawToggle(20, 99, config.enableLogging, "SD Logging");
-    drawToggle(20, 126, config.secureLogging, "Secure (AES)");
-    drawToggle(20, 153, config.autoBrightness, "Auto-Brightness");
-    drawToggle(20, 180, config.showBaseline, "Show Baseline");
+    for (int i = 0; i < SETTINGS_ROW_COUNT; i++) {
+        int rowY = SETTINGS_FIRST_ROW_Y + i * SETTINGS_ROW_SPACING;
+        drawToggle(SETTINGS_TOGGLE_X, rowY, *SETTINGS_ROWS[i].value, SETTINGS_ROWS[i].label);
+    }
     drawNavbar();
     tft.endWrite();
 }
@@ -1246,14 +1290,15 @@ void handleTouchGestures() {
         }
     } else if (currentScreen == SCREEN_SETTINGS) {
         // Toggle taps (hit area on the toggle switches)
-        if (x > 150 && x < 220) {
-            if (y > 45 && y < 67) config.enableBLE = !config.enableBLE;
-            else if (y > 72 && y < 94) config.enableWiFi = !config.enableWiFi;
-            else if (y > 99 && y < 121) config.enableLogging = !config.enableLogging;
-            else if (y > 126 && y < 148) config.secureLogging = !config.secureLogging;
-            else if (y > 153 && y < 175) config.autoBrightness = !config.autoBrightness;
-            else if (y > 180 && y < 202) config.showBaseline = !config.showBaseline;
-            saveConfig();
+        if (x > SETTINGS_TOGGLE_X_MIN && x < SETTINGS_TOGGLE_X_MAX) {
+            for (int i = 0; i < SETTINGS_ROW_COUNT; i++) {
+                int rowY = SETTINGS_FIRST_ROW_Y + i * SETTINGS_ROW_SPACING;
+                if (y > rowY && y < rowY + SETTINGS_TOGGLE_HEIGHT) {
+                    *SETTINGS_ROWS[i].value = !(*SETTINGS_ROWS[i].value);
+                    saveConfig();
+                    break;
+                }
+            }
         }
     }
 }
