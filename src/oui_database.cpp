@@ -474,6 +474,18 @@ void initializeStaticDatabase() {
     dynamicDatabase.push_back({"00:18:DA", "u-blox", CAT_SMART_CITY_INFRA, REL_LOW, DEPLOY_COUNCIL, "Industrial IoT Module"});
 
     // ============================================================
+    // ADDITIONAL UK-RELEVANT SURVEILLANCE OUIs
+    // ============================================================
+    dynamicDatabase.push_back({"E8:AB:FA", "Hikvision", CAT_CCTV, REL_HIGH, DEPLOY_COUNCIL, "ColorVu Cameras"});
+    dynamicDatabase.push_back({"48:0F:CF", "Hikvision", CAT_CCTV, REL_HIGH, DEPLOY_TRANSPORT, "AcuSense Cameras"});
+    dynamicDatabase.push_back({"40:F4:FD", "Dahua Technology", CAT_CCTV, REL_HIGH, DEPLOY_RETAIL, "WizSense Cameras"});
+    dynamicDatabase.push_back({"34:4B:50", "Dahua Technology", CAT_CCTV, REL_MEDIUM, DEPLOY_COUNCIL, "TiOC Cameras"});
+    dynamicDatabase.push_back({"00:04:E2", "SMC Networks", CAT_TRAFFIC, REL_MEDIUM, DEPLOY_TRANSPORT, "Traffic Infrastructure"});
+    dynamicDatabase.push_back({"DC:54:D7", "DJI", CAT_DRONE, REL_HIGH, DEPLOY_POLICE, "Mini Series Drones"});
+    dynamicDatabase.push_back({"00:1A:07", "i-PRO (Panasonic)", CAT_CCTV, REL_MEDIUM, DEPLOY_GOVERNMENT, "X-Series Cameras"});
+    dynamicDatabase.push_back({"B0:B2:DC", "Zyxel", CAT_SMART_CITY_INFRA, REL_LOW, DEPLOY_COUNCIL, "Council Network Infra"});
+
+    // ============================================================
     // CONSUMER BASELINE (filtered by default)
     // ============================================================
     dynamicDatabase.push_back({"74:DA:88", "Sky CPE", CAT_UNKNOWN, REL_LOW, DEPLOY_PRIVATE, "Consumer Broadband (Baseline)"});

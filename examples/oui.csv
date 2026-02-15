@@ -218,6 +218,14 @@ B0:B4:48,Texas Instruments,11,1,1,CC2640 BLE Module
 24:6F:28,Espressif,11,0,1,ESP32 IoT Module
 30:AE:A4,Espressif,11,0,1,ESP32 WiFi/BLE
 00:18:DA,u-blox,11,0,1,Industrial IoT Module
+E8:AB:FA,Hikvision,1,2,1,ColorVu Cameras
+48:0F:CF,Hikvision,1,2,2,AcuSense Cameras
+40:F4:FD,Dahua Technology,1,2,3,WizSense Cameras
+34:4B:50,Dahua Technology,1,1,1,TiOC Cameras
+00:04:E2,SMC Networks,6,1,2,Traffic Infrastructure
+DC:54:D7,DJI,3,2,0,Mini Series Drones
+00:1A:07,i-PRO (Panasonic),1,1,5,X-Series Cameras
+B0:B2:DC,Zyxel,11,0,1,Council Network Infra
 74:DA:88,Sky CPE,0,0,4,Consumer Broadband (Baseline)
 FC:F8:AE,BT/EE Hub,0,0,4,Consumer Broadband (Baseline)
 20:8B:FB,TP-Link,0,0,4,Consumer Networking (Baseline)
