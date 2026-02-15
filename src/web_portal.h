@@ -197,8 +197,9 @@ function drawRadar(){
   ctx.beginPath();ctx.moveTo(cx-r,cy);ctx.lineTo(cx+r,cy);ctx.moveTo(cx,cy-r);ctx.lineTo(cx,cy+r);ctx.stroke();
   ctx.fillStyle='#06b6d4';ctx.beginPath();ctx.arc(cx,cy,4,0,Math.PI*2);ctx.fill();
   ctx.fillStyle='#64748b';ctx.font='11px sans-serif';ctx.fillText('YOU',cx+8,cy-8);
+  if(allDetections.length===0){ctx.fillStyle='#64748b';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillText('No devices in range',cx,cy+r/2);ctx.textAlign='start';return;}
   allDetections.forEach(function(d){
-    var dist=((Math.min(Math.max(d.rssi,-100),-30)+100)/70)*r;
+    var dist=(1-((Math.min(Math.max(d.rssi,-100),-30)+100)/70))*r;
     var hash=0;for(var j=0;j<d.mac.length;j++)hash=hash*31+d.mac.charCodeAt(j);
     var angle=(hash%360)*Math.PI/180;
     var px=cx+dist*Math.cos(angle),py=cy+dist*Math.sin(angle);
