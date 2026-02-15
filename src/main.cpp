@@ -162,7 +162,7 @@ struct Config {
     bool enableWiFi = true;
     bool enableLogging = true;
     bool secureLogging = false;
-    bool showBaseline = false;  // Filter baseline by default
+    bool showBaseline = true;   // Show all devices by default
     bool enableWebPortal = true;
     int brightness = 255;
     bool autoBrightness = true;
@@ -886,27 +886,32 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
     mac.toUpperCase();
     String oui = mac.substring(0, 8);
 
-    // Check OUI database first
-    const OUIEntry* entry = findOUI(oui);
-    if (!entry) return;
-
-    totalMatched++;
-    Serial.printf("[OUI] MATCH: %s -> %s\n", oui.c_str(), entry->manufacturer);
-
     // Build detection
     Detection det;
     det.macAddress = mac;
-    det.manufacturer = entry->manufacturer;
-    det.category = entry->category;
-    det.relevance = entry->relevance;
     det.rssi = rssi;
     det.timestamp = millis();
     det.firstSeen = millis();
     det.sightings = 1;
     det.isBLE = isBLE;
-    det.priority = (det.relevance == REL_HIGH) ? 4 : (det.relevance == REL_MEDIUM) ? 3 : 2;
     det.context = "";
     det.correlationGroup = "";
+
+    // Check OUI database
+    const OUIEntry* entry = findOUI(oui);
+    if (entry) {
+        totalMatched++;
+        Serial.printf("[OUI] MATCH: %s -> %s\n", oui.c_str(), entry->manufacturer);
+        det.manufacturer = entry->manufacturer;
+        det.category = entry->category;
+        det.relevance = entry->relevance;
+        det.priority = (det.relevance == REL_HIGH) ? 4 : (det.relevance == REL_MEDIUM) ? 3 : 2;
+    } else {
+        det.manufacturer = oui;
+        det.category = "Unknown";
+        det.relevance = REL_LOW;
+        det.priority = PRIORITY_BASELINE;
+    }
 
     // Enrich with priority database
     auto priIt = priorityLookup.find(oui);
@@ -1675,7 +1680,7 @@ void loadConfig() {
     config.enableLogging = preferences.getBool("log", true);
     config.secureLogging = preferences.getBool("secure", false);
     config.autoBrightness = preferences.getBool("auto", true);
-    config.showBaseline = preferences.getBool("baseline", false);
+    config.showBaseline = preferences.getBool("baseline", true);
     config.enableWebPortal = preferences.getBool("webp", true);
     preferences.end();
 }
