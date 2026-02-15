@@ -188,6 +188,11 @@ int wizardStep = 0;
 int scrollOffset = 0;
 int maxScroll = 0;
 
+// Display dirty-flag system — only redraw when state changes.
+// Eliminates the full-screen clear every 30 ms that causes flicker.
+volatile bool displayDirty = true;
+unsigned long lastRedrawTime = 0;
+
 // ============================================================
 // FUNCTION PROTOTYPES
 // ============================================================
@@ -381,6 +386,7 @@ void runCorrelationEngine() {
     xSemaphoreGive(xDetectionMutex);
 
     // Evaluate each rule
+    size_t prevAlertCount = activeAlerts.size();
     activeAlerts.clear();
     for (auto& rule : correlationRules) {
         int matchingDevices = 0;
@@ -405,6 +411,9 @@ void runCorrelationEngine() {
                 alertLED(4);
             }
         }
+    }
+    if (activeAlerts.size() != prevAlertCount) {
+        displayDirty = true;
     }
 }
 
@@ -521,8 +530,8 @@ void UITask(void *pvParameters) {
     unsigned long uiLoopCount = 0;
     for (;;) {
         if (uiLoopCount < 3 || uiLoopCount % 100 == 0) {
-            Serial.printf("[UI] loop #%lu screen=%d BOOT=%s\n",
-                          uiLoopCount, (int)currentScreen,
+            Serial.printf("[UI] loop #%lu screen=%d dirty=%d BOOT=%s\n",
+                          uiLoopCount, (int)currentScreen, (int)displayDirty,
                           digitalRead(BOOT_BTN) == LOW ? "PRESSED" : "idle");
         }
         uiLoopCount++;
@@ -537,6 +546,15 @@ void UITask(void *pvParameters) {
             }
         }
         batteryVoltage = readBattery();
+
+        // Periodic refresh every 2 seconds for battery level, scan status, etc.
+        // This is the ONLY timer-driven redraw; everything else is event-driven.
+        static unsigned long lastPeriodicRefresh = 0;
+        if (millis() - lastPeriodicRefresh >= 2000) {
+            displayDirty = true;
+            lastPeriodicRefresh = millis();
+        }
+
         updateDisplay();
 
         if (millis() - lastInteractionTime > (unsigned long)(config.sleepTimeout * 1000)) {
@@ -608,31 +626,52 @@ bool readTouch(uint16_t *x, uint16_t *y) {
     }
 
     // Read pressure to confirm a real touch
-    // Z1 command: 0xB1 = addr 011, 12-bit, diff, PD 01 (ref on, penirq off during read)
-    // Z2 command: 0xC1 = addr 100, 12-bit, diff, PD 01
     uint16_t z1 = touchReadChannel(0xB1);
     uint16_t z2 = touchReadChannel(0xC1);
     int pressure = z1 + (4095 - z2);
     if (pressure < 500) return false;
 
-    // Multi-sample for stability
-    // X command: 0x91 = addr 001, 12-bit, diff, PD 01
-    // Y command: 0xD1 = addr 101, 12-bit, diff, PD 01
-    uint32_t sumX = 0, sumY = 0;
-    for (int s = 0; s < 4; s++) {
-        sumX += touchReadChannel(0x91);
-        sumY += touchReadChannel(0xD1);
+    // Robust multi-sample with trimmed mean.
+    // Take 8 samples, sort, discard 2 highest + 2 lowest, average the middle 4.
+    // This eliminates noise spikes that made the old 4-sample average jump around.
+    const int N = 8;
+    uint16_t sampX[N], sampY[N];
+    for (int s = 0; s < N; s++) {
+        sampX[s] = touchReadChannel(0x91);
+        sampY[s] = touchReadChannel(0xD1);
     }
 
     // Final read with PD=00 to re-enable PENIRQ for the IRQ pin
-    touchReadChannel(0x90);  // X with PD=00: power down, enable PENIRQ
+    touchReadChannel(0x90);
 
-    Serial.printf("TOUCH: z1=%u z2=%u pressure=%d rawX=%lu rawY=%lu\n",
-                  z1, z2, pressure, sumX / 4, sumY / 4);
+    // Sort for median/trimmed-mean
+    std::sort(sampX, sampX + N);
+    std::sort(sampY, sampY + N);
 
-    // Map to landscape screen coordinates (rotation=1, 320x240)
-    *x = constrain(map(sumY / 4, 200, 3900, 0, 319), 0, 319);
-    *y = constrain(map(sumX / 4, 3900, 200, 0, 239), 0, 239);
+    // Reject if the middle samples still have excessive spread (> 200 ADC counts)
+    // — indicates finger is sliding or electrical noise, not a clean tap
+    if ((sampX[N - 3] - sampX[2]) > 200 || (sampY[N - 3] - sampY[2]) > 200) {
+        return false;
+    }
+
+    // Trimmed mean of the middle 4 samples
+    uint32_t avgX = 0, avgY = 0;
+    for (int i = 2; i < N - 2; i++) {
+        avgX += sampX[i];
+        avgY += sampY[i];
+    }
+    avgX /= (N - 4);
+    avgY /= (N - 4);
+
+    Serial.printf("TOUCH: pressure=%d rawX=%lu rawY=%lu\n", pressure, avgX, avgY);
+
+    // Map to landscape screen coordinates (rotation=1, 320x240).
+    // XPT2046 Y channel → screen X, X channel → screen Y (inverted for landscape).
+    // Raw range 200–3900 is typical for the CYD 2.8" panel; if touch is
+    // consistently offset you can tighten these by watching the serial output
+    // and replacing the min/max with your panel's actual extremes.
+    *x = constrain(map((long)avgY, 200, 3900, 0, 319), 0, 319);
+    *y = constrain(map((long)avgX, 3900, 200, 0, 239), 0, 239);
 
     Serial.printf("TOUCH: mapped x=%u y=%u\n", *x, *y);
     lastInteractionTime = millis();
@@ -834,6 +873,7 @@ void addDetection(Detection det) {
         return a.rssi > b.rssi;
     });
     xSemaphoreGive(xDetectionMutex);
+    displayDirty = true;  // New/updated detection → refresh display
 }
 
 // ============================================================
@@ -841,6 +881,11 @@ void addDetection(Detection det) {
 // ============================================================
 
 void updateDisplay() {
+    if (!displayDirty) return;
+
+    displayDirty = false;
+    lastRedrawTime = millis();
+
     switch (currentScreen) {
         case SCREEN_MAIN:     drawMainScreen(); break;
         case SCREEN_RADAR:    drawRadarScreen(); break;
@@ -1235,25 +1280,29 @@ void handleTouchGestures() {
         int newScreen = x / 80;
         if (newScreen >= 0 && newScreen <= 3) {
             currentScreen = (Screen)(newScreen + 1);
-            scrollOffset = 0;  // Reset scroll on page change
+            scrollOffset = 0;
         }
+        displayDirty = true;
     } else if (currentScreen == SCREEN_MAIN) {
         // Scroll: top half = scroll up, bottom half = scroll down
         if (y < 120 && scrollOffset > 0) {
             scrollOffset--;
+            displayDirty = true;
         } else if (y >= 120 && y < 210 && scrollOffset < maxScroll) {
             scrollOffset++;
+            displayDirty = true;
         }
     } else if (currentScreen == SCREEN_SETTINGS) {
-        // Toggle taps (hit area on the toggle switches)
-        if (x > 150 && x < 220) {
-            if (y > 45 && y < 67) config.enableBLE = !config.enableBLE;
-            else if (y > 72 && y < 94) config.enableWiFi = !config.enableWiFi;
-            else if (y > 99 && y < 121) config.enableLogging = !config.enableLogging;
-            else if (y > 126 && y < 148) config.secureLogging = !config.secureLogging;
-            else if (y > 153 && y < 175) config.autoBrightness = !config.autoBrightness;
-            else if (y > 180 && y < 202) config.showBaseline = !config.showBaseline;
+        // Toggle taps — widen hit area to full row width for easier tapping
+        if (x > 20 && x < 260) {
+            if (y > 35 && y < 67) config.enableBLE = !config.enableBLE;
+            else if (y > 67 && y < 94) config.enableWiFi = !config.enableWiFi;
+            else if (y > 94 && y < 121) config.enableLogging = !config.enableLogging;
+            else if (y > 121 && y < 148) config.secureLogging = !config.secureLogging;
+            else if (y > 148 && y < 175) config.autoBrightness = !config.autoBrightness;
+            else if (y > 175 && y < 210) config.showBaseline = !config.showBaseline;
             saveConfig();
+            displayDirty = true;
         }
     }
 }
@@ -1275,6 +1324,7 @@ void handleBootButton() {
     if (s > (int)SCREEN_INFO) s = (int)SCREEN_MAIN;
     currentScreen = (Screen)s;
     scrollOffset = 0;
+    displayDirty = true;
     Serial.printf("[BOOT BTN] Screen %d -> %d\n", (int)prev, (int)currentScreen);
 }
 
