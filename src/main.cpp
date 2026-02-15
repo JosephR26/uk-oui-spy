@@ -546,26 +546,50 @@ void UITask(void *pvParameters) {
 // (MOSI=32, MISO=39, CLK=25, CS=33), NOT the display bus.
 // ============================================================
 
-uint8_t touchSpiTransfer(uint8_t data) {
-    uint8_t result = 0;
-    for (uint8_t i = 0; i < 8; i++) {
-        digitalWrite(TOUCH_MOSI, (data & 0x80) ? HIGH : LOW);
-        data <<= 1;
-        digitalWrite(TOUCH_CLK, HIGH);
-        result <<= 1;
-        if (digitalRead(TOUCH_MISO)) result |= 1;
-        digitalWrite(TOUCH_CLK, LOW);
-    }
-    return result;
+// XPT2046 SPI Mode 0: data clocked in on rising edge, out on falling edge.
+// We bit-bang because the touch controller sits on its own GPIO set (not HSPI/VSPI).
+
+void touchClockCycle() {
+    digitalWrite(TOUCH_CLK, HIGH);
+    delayMicroseconds(2);
+    digitalWrite(TOUCH_CLK, LOW);
+    delayMicroseconds(2);
 }
 
 uint16_t touchReadChannel(uint8_t cmd) {
     digitalWrite(TOUCH_CS, LOW);
-    touchSpiTransfer(cmd);
-    uint16_t val = (uint16_t)touchSpiTransfer(0x00) << 8;
-    val |= touchSpiTransfer(0x00);
+    delayMicroseconds(2);
+
+    // Send 8-bit command (MSB first), clock data in on rising edge
+    for (uint8_t i = 0; i < 8; i++) {
+        digitalWrite(TOUCH_MOSI, (cmd & 0x80) ? HIGH : LOW);
+        cmd <<= 1;
+        touchClockCycle();
+    }
+
+    // One extra clock for the busy/conversion cycle
+    touchClockCycle();
+
+    // Read 12-bit result: XPT2046 shifts data out on falling CLK edge,
+    // so we sample MISO after CLK goes LOW.
+    uint16_t result = 0;
+    for (uint8_t i = 0; i < 12; i++) {
+        digitalWrite(TOUCH_CLK, HIGH);
+        delayMicroseconds(2);
+        digitalWrite(TOUCH_CLK, LOW);
+        delayMicroseconds(2);
+        result <<= 1;
+        if (digitalRead(TOUCH_MISO)) result |= 1;
+    }
+
+    // Drain remaining 3 trailing bits to complete the 16-clock read
+    for (uint8_t i = 0; i < 3; i++) {
+        touchClockCycle();
+    }
+
     digitalWrite(TOUCH_CS, HIGH);
-    return val >> 3;  // 12-bit result (skip busy bit + align)
+    digitalWrite(TOUCH_MOSI, LOW);
+    return result;
 }
 
 bool readTouch(uint16_t *x, uint16_t *y) {
@@ -576,22 +600,34 @@ bool readTouch(uint16_t *x, uint16_t *y) {
         return false;
     }
 
+    // Read pressure to confirm a real touch
+    // Z1 command: 0xB1 = addr 011, 12-bit, diff, PD 01 (ref on, penirq off during read)
+    // Z2 command: 0xC1 = addr 100, 12-bit, diff, PD 01
     uint16_t z1 = touchReadChannel(0xB1);
     uint16_t z2 = touchReadChannel(0xC1);
     int pressure = z1 + (4095 - z2);
     if (pressure < 500) return false;
 
     // Multi-sample for stability
+    // X command: 0x91 = addr 001, 12-bit, diff, PD 01
+    // Y command: 0xD1 = addr 101, 12-bit, diff, PD 01
     uint32_t sumX = 0, sumY = 0;
     for (int s = 0; s < 4; s++) {
-        sumX += touchReadChannel(0x91);  // X channel
-        sumY += touchReadChannel(0xD1);  // Y channel
+        sumX += touchReadChannel(0x91);
+        sumY += touchReadChannel(0xD1);
     }
+
+    // Final read with PD=00 to re-enable PENIRQ for the IRQ pin
+    touchReadChannel(0x90);  // X with PD=00: power down, enable PENIRQ
+
+    Serial.printf("TOUCH: z1=%u z2=%u pressure=%d rawX=%lu rawY=%lu\n",
+                  z1, z2, pressure, sumX / 4, sumY / 4);
 
     // Map to landscape screen coordinates (rotation=1, 320x240)
     *x = constrain(map(sumY / 4, 200, 3900, 0, 319), 0, 319);
     *y = constrain(map(sumX / 4, 3900, 200, 0, 239), 0, 239);
 
+    Serial.printf("TOUCH: mapped x=%u y=%u\n", *x, *y);
     lastInteractionTime = millis();
     return true;
 }
@@ -617,7 +653,12 @@ void setup() {
     initDisplay();
     initTouch();
     loadConfig();
-    currentScreen = config.setupComplete ? SCREEN_MAIN : SCREEN_WIZARD;
+    // Skip wizard — boot straight to main screen
+    if (!config.setupComplete) {
+        config.setupComplete = true;
+        saveConfig();
+    }
+    currentScreen = SCREEN_MAIN;
 
     initSDCard();
 
@@ -654,6 +695,13 @@ void initTouch() {
     digitalWrite(TOUCH_CLK, LOW);
     touchAvailable = true;
     Serial.println("XPT2046 touch initialized (bit-bang SPI: MOSI=32 MISO=39 CLK=25 CS=33)");
+
+    // Self-test: read X channel to verify SPI comms (non-zero = chip responding)
+    uint16_t testVal = touchReadChannel(0x91);
+    Serial.printf("  Touch self-test: X raw=%u, IRQ=%s\n",
+                  testVal, digitalRead(TOUCH_IRQ) == LOW ? "LOW(touched)" : "HIGH(idle)");
+    // Send power-down command to re-enable PENIRQ
+    touchReadChannel(0x90);
 }
 
 void initSDCard() {
