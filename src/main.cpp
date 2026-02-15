@@ -191,7 +191,6 @@ int maxScroll = 0;
 // Display dirty-flag system — only redraw when state changes.
 // Eliminates the full-screen clear every 30 ms that causes flicker.
 volatile bool displayDirty = true;
-unsigned long lastRedrawTime = 0;
 
 // ============================================================
 // FUNCTION PROTOTYPES
@@ -385,8 +384,19 @@ void runCorrelationEngine() {
     }
     xSemaphoreGive(xDetectionMutex);
 
+    // Compute a hash of the current alerts so we can detect content changes,
+    // not just count changes (e.g. different alerts with the same count).
+    auto hashAlerts = [](const std::vector<CorrelationAlert>& alerts) -> uint32_t {
+        uint32_t h = 0;
+        for (auto& a : alerts) {
+            for (char c : a.name) h = h * 31 + c;
+            for (char c : a.alertLevel) h = h * 31 + c;
+        }
+        return h;
+    };
+    uint32_t prevHash = hashAlerts(activeAlerts);
+
     // Evaluate each rule
-    size_t prevAlertCount = activeAlerts.size();
     activeAlerts.clear();
     for (auto& rule : correlationRules) {
         int matchingDevices = 0;
@@ -412,7 +422,7 @@ void runCorrelationEngine() {
             }
         }
     }
-    if (activeAlerts.size() != prevAlertCount) {
+    if (hashAlerts(activeAlerts) != prevHash) {
         displayDirty = true;
     }
 }
@@ -566,6 +576,31 @@ void UITask(void *pvParameters) {
 }
 
 // ============================================================
+// TOUCH CONSTANTS
+// ============================================================
+
+// Touch sampling: take N samples, discard the top and bottom TOUCH_TRIM_COUNT,
+// average the middle (N - 2*TOUCH_TRIM_COUNT).
+static const int TOUCH_SAMPLES        = 8;
+static const int TOUCH_TRIM_COUNT     = 2;
+// Max ADC spread allowed between middle samples; rejects noisy/sliding touches
+static const uint16_t TOUCH_MAX_SPREAD = 200;
+// Minimum pressure threshold to register a touch (z1 + 4095 - z2)
+static const int TOUCH_MIN_PRESSURE   = 500;
+
+// XPT2046 raw ADC range for the CYD 2.8" panel.
+// Adjust these by watching "TOUCH: rawX=... rawY=..." on serial.
+static const long TOUCH_RAW_MIN = 200;
+static const long TOUCH_RAW_MAX = 3900;
+
+// Settings screen: toggle rows are drawn at these Y origins (from drawSettingsScreen)
+// and the hitbox extends from ROW_Y - SETTINGS_ROW_PAD to ROW_Y + SETTINGS_ROW_HEIGHT - SETTINGS_ROW_PAD.
+static const int SETTINGS_ROW_Y[]     = {45, 72, 99, 126, 153, 180};
+static const int SETTINGS_ROW_HEIGHT  = 27;
+static const int SETTINGS_HIT_X_MIN   = 20;
+static const int SETTINGS_HIT_X_MAX   = 260;
+
+// ============================================================
 // TOUCH DRIVER (XPT2046 via bit-bang SPI on dedicated bus)
 // The CYD board wires the XPT2046 to separate SPI pins
 // (MOSI=32, MISO=39, CLK=25, CS=33), NOT the display bus.
@@ -629,14 +664,13 @@ bool readTouch(uint16_t *x, uint16_t *y) {
     uint16_t z1 = touchReadChannel(0xB1);
     uint16_t z2 = touchReadChannel(0xC1);
     int pressure = z1 + (4095 - z2);
-    if (pressure < 500) return false;
+    if (pressure < TOUCH_MIN_PRESSURE) return false;
 
     // Robust multi-sample with trimmed mean.
-    // Take 8 samples, sort, discard 2 highest + 2 lowest, average the middle 4.
-    // This eliminates noise spikes that made the old 4-sample average jump around.
-    const int N = 8;
-    uint16_t sampX[N], sampY[N];
-    for (int s = 0; s < N; s++) {
+    // Take TOUCH_SAMPLES samples, sort, discard top/bottom TOUCH_TRIM_COUNT,
+    // average the middle.
+    uint16_t sampX[TOUCH_SAMPLES], sampY[TOUCH_SAMPLES];
+    for (int s = 0; s < TOUCH_SAMPLES; s++) {
         sampX[s] = touchReadChannel(0x91);
         sampY[s] = touchReadChannel(0xD1);
     }
@@ -645,33 +679,32 @@ bool readTouch(uint16_t *x, uint16_t *y) {
     touchReadChannel(0x90);
 
     // Sort for median/trimmed-mean
-    std::sort(sampX, sampX + N);
-    std::sort(sampY, sampY + N);
+    std::sort(sampX, sampX + TOUCH_SAMPLES);
+    std::sort(sampY, sampY + TOUCH_SAMPLES);
 
-    // Reject if the middle samples still have excessive spread (> 200 ADC counts)
+    // Reject if the middle samples still have excessive spread
     // — indicates finger is sliding or electrical noise, not a clean tap
-    if ((sampX[N - 3] - sampX[2]) > 200 || (sampY[N - 3] - sampY[2]) > 200) {
+    if ((sampX[TOUCH_SAMPLES - TOUCH_TRIM_COUNT - 1] - sampX[TOUCH_TRIM_COUNT]) > TOUCH_MAX_SPREAD ||
+        (sampY[TOUCH_SAMPLES - TOUCH_TRIM_COUNT - 1] - sampY[TOUCH_TRIM_COUNT]) > TOUCH_MAX_SPREAD) {
         return false;
     }
 
-    // Trimmed mean of the middle 4 samples
+    // Trimmed mean of the middle samples
     uint32_t avgX = 0, avgY = 0;
-    for (int i = 2; i < N - 2; i++) {
+    for (int i = TOUCH_TRIM_COUNT; i < TOUCH_SAMPLES - TOUCH_TRIM_COUNT; i++) {
         avgX += sampX[i];
         avgY += sampY[i];
     }
-    avgX /= (N - 4);
-    avgY /= (N - 4);
+    avgX /= (TOUCH_SAMPLES - 2 * TOUCH_TRIM_COUNT);
+    avgY /= (TOUCH_SAMPLES - 2 * TOUCH_TRIM_COUNT);
 
     Serial.printf("TOUCH: pressure=%d rawX=%lu rawY=%lu\n", pressure, avgX, avgY);
 
     // Map to landscape screen coordinates (rotation=1, 320x240).
     // XPT2046 Y channel → screen X, X channel → screen Y (inverted for landscape).
-    // Raw range 200–3900 is typical for the CYD 2.8" panel; if touch is
-    // consistently offset you can tighten these by watching the serial output
-    // and replacing the min/max with your panel's actual extremes.
-    *x = constrain(map((long)avgY, 200, 3900, 0, 319), 0, 319);
-    *y = constrain(map((long)avgX, 3900, 200, 0, 239), 0, 239);
+    // Adjust TOUCH_RAW_MIN / TOUCH_RAW_MAX by watching serial output.
+    *x = constrain(map((long)avgY, TOUCH_RAW_MIN, TOUCH_RAW_MAX, 0, 319), 0, 319);
+    *y = constrain(map((long)avgX, TOUCH_RAW_MAX, TOUCH_RAW_MIN, 0, 239), 0, 239);
 
     Serial.printf("TOUCH: mapped x=%u y=%u\n", *x, *y);
     lastInteractionTime = millis();
@@ -884,7 +917,6 @@ void updateDisplay() {
     if (!displayDirty) return;
 
     displayDirty = false;
-    lastRedrawTime = millis();
 
     switch (currentScreen) {
         case SCREEN_MAIN:     drawMainScreen(); break;
@@ -1294,13 +1326,19 @@ void handleTouchGestures() {
         }
     } else if (currentScreen == SCREEN_SETTINGS) {
         // Toggle taps — widen hit area to full row width for easier tapping
-        if (x > 20 && x < 260) {
-            if (y > 35 && y < 67) config.enableBLE = !config.enableBLE;
-            else if (y > 67 && y < 94) config.enableWiFi = !config.enableWiFi;
-            else if (y > 94 && y < 121) config.enableLogging = !config.enableLogging;
-            else if (y > 121 && y < 148) config.secureLogging = !config.secureLogging;
-            else if (y > 148 && y < 175) config.autoBrightness = !config.autoBrightness;
-            else if (y > 175 && y < 210) config.showBaseline = !config.showBaseline;
+        if (x > SETTINGS_HIT_X_MIN && x < SETTINGS_HIT_X_MAX) {
+            bool* toggles[] = {
+                &config.enableBLE, &config.enableWiFi, &config.enableLogging,
+                &config.secureLogging, &config.autoBrightness, &config.showBaseline
+            };
+            for (int i = 0; i < 6; i++) {
+                int rowTop = SETTINGS_ROW_Y[i] - 10;
+                int rowBot = SETTINGS_ROW_Y[i] + SETTINGS_ROW_HEIGHT - 5;
+                if (y > rowTop && y < rowBot) {
+                    *toggles[i] = !*toggles[i];
+                    break;
+                }
+            }
             saveConfig();
             displayDirty = true;
         }
