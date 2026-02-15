@@ -1365,7 +1365,7 @@ void drawRadarScreen() {
         if (!config.showBaseline && det.priority <= PRIORITY_BASELINE) continue;
 
         // Distance from RSSI
-        float dist = map(constrain(det.rssi, -100, -30), -100, -30, r, 5);
+        float dist = map(constrain(det.rssi, -100, -30), -30, -100, 5, r);
 
         // Deterministic angle from MAC hash
         unsigned long hash = 0;
