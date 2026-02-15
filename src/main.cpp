@@ -32,10 +32,14 @@
 // HARDWARE PIN DEFINITIONS
 // ============================================================
 
-// XPT2046 resistive touch (SPI, handled by TFT_eSPI)
-// TOUCH_CS defined in platformio.ini build flags (GPIO 33)
-// Calibration data: {x_min, x_max, y_min, y_max, rotation}
-uint16_t touchCalData[5] = {300, 3600, 300, 3600, 1};
+// XPT2046 resistive touch — separate SPI bus from display (bit-bang)
+// On ESP32-2432S028R the touch controller is wired to its own SPI pins,
+// NOT the same bus as the ILI9341 display.
+#define TOUCH_MOSI 32
+#define TOUCH_MISO 39   // Input-only GPIO
+#define TOUCH_CLK  25
+#define TOUCH_CS   33
+#define TOUCH_IRQ  36   // T_IRQ (active LOW on touch, used for deep sleep wakeup)
 
 // Backlight polarity (derived from platformio.ini)
 #ifndef TFT_BACKLIGHT_ON
@@ -47,13 +51,19 @@ uint16_t touchCalData[5] = {300, 3600, 300, 3600, 1};
 #define TFT_BACKLIGHT_OFF HIGH
 #endif
 
-#define SD_CS 5
+// SD card — VSPI bus (separate from display HSPI)
+#define SD_CS    5
+#define SD_MOSI  23
+#define SD_MISO  19
+#define SD_SCLK  18
+
 #define LED_PIN 4
 #define LED_G_PIN 16
 #define LED_B_PIN 17
 #define LDR_PIN 34
 #define BAT_ADC 35
-#define TOUCH_IRQ 36  // XPT2046 T_IRQ (active LOW on touch)
+
+SPIClass sdSPI(VSPI);
 
 // ============================================================
 // PRIORITY TIER SYSTEM
@@ -182,9 +192,12 @@ int maxScroll = 0;
 // ============================================================
 
 void initDisplay();
+void initTouch();
 void initBLE();
 void initWiFi();
 void initSDCard();
+uint8_t touchSpiTransfer(uint8_t data);
+uint16_t touchReadChannel(uint8_t cmd);
 void scanBLE();
 void scanWiFi();
 void checkOUI(String macAddress, int8_t rssi, bool isBLE);
@@ -525,18 +538,52 @@ void UITask(void *pvParameters) {
 }
 
 // ============================================================
-// TOUCH DRIVER (XPT2046 via TFT_eSPI)
+// TOUCH DRIVER (XPT2046 via bit-bang SPI on dedicated bus)
+// The CYD board wires the XPT2046 to separate SPI pins
+// (MOSI=32, MISO=39, CLK=25, CS=33), NOT the display bus.
 // ============================================================
 
-bool readTouch(uint16_t *x, uint16_t *y) {
-    uint16_t tx, ty;
-    if (tft.getTouch(&tx, &ty)) {
-        *x = tx;
-        *y = ty;
-        lastInteractionTime = millis();
-        return true;
+uint8_t touchSpiTransfer(uint8_t data) {
+    uint8_t result = 0;
+    for (uint8_t i = 0; i < 8; i++) {
+        digitalWrite(TOUCH_MOSI, (data & 0x80) ? HIGH : LOW);
+        data <<= 1;
+        digitalWrite(TOUCH_CLK, HIGH);
+        result <<= 1;
+        if (digitalRead(TOUCH_MISO)) result |= 1;
+        digitalWrite(TOUCH_CLK, LOW);
     }
-    return false;
+    return result;
+}
+
+uint16_t touchReadChannel(uint8_t cmd) {
+    digitalWrite(TOUCH_CS, LOW);
+    touchSpiTransfer(cmd);
+    uint16_t val = (uint16_t)touchSpiTransfer(0x00) << 8;
+    val |= touchSpiTransfer(0x00);
+    digitalWrite(TOUCH_CS, HIGH);
+    return val >> 3;  // 12-bit result (skip busy bit + align)
+}
+
+bool readTouch(uint16_t *x, uint16_t *y) {
+    uint16_t z1 = touchReadChannel(0xB1);
+    uint16_t z2 = touchReadChannel(0xC1);
+    int pressure = z1 + (4095 - z2);
+    if (pressure < 500) return false;
+
+    // Multi-sample for stability
+    uint32_t sumX = 0, sumY = 0;
+    for (int s = 0; s < 4; s++) {
+        sumX += touchReadChannel(0x91);  // X channel
+        sumY += touchReadChannel(0xD1);  // Y channel
+    }
+
+    // Map to landscape screen coordinates (rotation=1, 320x240)
+    *x = constrain(map(sumY / 4, 200, 3900, 0, 319), 0, 319);
+    *y = constrain(map(sumX / 4, 3900, 200, 0, 239), 0, 239);
+
+    lastInteractionTime = millis();
+    return true;
 }
 
 // ============================================================
@@ -557,11 +604,7 @@ void setup() {
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
 
     initDisplay();
-
-    // XPT2046 touch calibration
-    tft.setTouch(touchCalData);
-    Serial.println("XPT2046 touch initialized (SPI, CS=GPIO 33)");
-    touchAvailable = true;
+    initTouch();
     loadConfig();
     currentScreen = config.setupComplete ? SCREEN_MAIN : SCREEN_WIZARD;
 
@@ -587,7 +630,22 @@ void loop() { vTaskDelay(pdMS_TO_TICKS(1000)); }
 // ============================================================
 
 void initDisplay() { tft.init(); tft.setRotation(1); tft.fillScreen(COL_BG); }
-void initSDCard() { sdCardAvailable = SD.begin(SD_CS); }
+
+void initTouch() {
+    pinMode(TOUCH_CLK, OUTPUT);
+    pinMode(TOUCH_MOSI, OUTPUT);
+    pinMode(TOUCH_MISO, INPUT);
+    pinMode(TOUCH_CS, OUTPUT);
+    digitalWrite(TOUCH_CS, HIGH);
+    digitalWrite(TOUCH_CLK, LOW);
+    touchAvailable = true;
+    Serial.println("XPT2046 touch initialized (bit-bang SPI: MOSI=32 MISO=39 CLK=25 CS=33)");
+}
+
+void initSDCard() {
+    sdSPI.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS);
+    sdCardAvailable = SD.begin(SD_CS, sdSPI);
+}
 void initBLE() { NimBLEDevice::init("UK-OUI-SPY"); }
 void initWiFi() { WiFi.mode(WIFI_STA); WiFi.disconnect(); }
 
