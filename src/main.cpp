@@ -49,6 +49,24 @@
 #define XPT2046_CLK  25
 #define XPT2046_CS   33
 
+// ============================================================
+// TOUCH CALIBRATION CONSTANTS
+// Source: Fr4nkFletcher/ESP32-Marauder-Cheap-Yellow-Display
+//   Display.cpp calData for CYD_28: { 350, 3465, 188, 3431, 2 }
+//   (raw_x: 350–3465 | raw_y: 188–3431 | flags: y-inverted)
+//
+// XPT2046_Touchscreen at rotation=1 transforms raw ADC as:
+//   p.x = 4096 - raw_y   →  4096-3431 = 665   to  4096-188 = 3908
+//   p.y = raw_x           →  350  to  3465
+//
+// Stored in NVS via saveConfig/loadConfig so they survive reboot
+// and can be updated in the field without reflashing.
+// ============================================================
+#define TOUCH_CAL_X_MIN_DEFAULT   665
+#define TOUCH_CAL_X_MAX_DEFAULT  3908
+#define TOUCH_CAL_Y_MIN_DEFAULT   350
+#define TOUCH_CAL_Y_MAX_DEFAULT  3465
+
 // Backlight polarity (derived from platformio.ini)
 #ifndef TFT_BACKLIGHT_ON
 #define TFT_BACKLIGHT_ON HIGH
@@ -170,6 +188,11 @@ struct Config {
     char encryptionKey[17] = "UK-OUI-SPY-2026";
     bool setupComplete = false;
     int sleepTimeout = 300;
+    // Touch calibration — Fr4nkFletcher CYD_28 validated defaults
+    int calXMin = TOUCH_CAL_X_MIN_DEFAULT;
+    int calXMax = TOUCH_CAL_X_MAX_DEFAULT;
+    int calYMin = TOUCH_CAL_Y_MIN_DEFAULT;
+    int calYMax = TOUCH_CAL_Y_MAX_DEFAULT;
 };
 
 // ============================================================
@@ -618,7 +641,17 @@ static const int SETTINGS_HIT_X_MIN   = 20;
 static const int SETTINGS_HIT_X_MAX   = 260;
 
 // ============================================================
-// TOUCH DRIVER (XPT2046 via Paul Stoffregen library on HSPI)
+// TOUCH DRIVER (XPT2046 via Paul Stoffregen library on VSPI)
+//
+// Fr4nkFletcher CYD_28 calibration (Display.cpp calData):
+//   { 350, 3465, 188, 3431, 2 }
+//   raw_x: 350–3465  raw_y: 188–3431  flags: y-inverted
+//
+// XPT2046_Touchscreen rotation=1 transforms raw ADC as:
+//   p.x = 4096 - raw_y  →  665 to 3908  →  screen X (0 to 319)
+//   p.y = raw_x          →  350 to 3465  →  screen Y (0 to 239)
+//
+// config.calX/YMin/Max loaded from NVS (defaults = Fr4nkFletcher values).
 // ============================================================
 
 bool readTouch(uint16_t *x, uint16_t *y) {
@@ -627,16 +660,14 @@ bool readTouch(uint16_t *x, uint16_t *y) {
     if (touchscreen.tirqTouched() && touchscreen.touched()) {
         TS_Point p = touchscreen.getPoint();
 
-        // Map raw coordinates to screen pixels
-        *x = map(p.x, 200, 3700, 0, SCREEN_WIDTH);
-        *y = map(p.y, 240, 3800, 0, SCREEN_HEIGHT);
+        // Map rotated raw coordinates to screen pixels (NVS-backed cal values)
+        *x = map(p.x, config.calXMin, config.calXMax, 0, SCREEN_WIDTH);
+        *y = map(p.y, config.calYMin, config.calYMax, 0, SCREEN_HEIGHT);
 
         *x = constrain(*x, 0, SCREEN_WIDTH - 1);
         *y = constrain(*y, 0, SCREEN_HEIGHT - 1);
 
-        #ifdef DEBUG_TOUCH
         Serial.printf("TOUCH: raw(%d,%d,%d) mapped(%u,%u)\n", p.x, p.y, p.z, *x, *y);
-        #endif
         lastInteractionTime = millis();
         return true;
     }
@@ -681,6 +712,8 @@ void setup() {
     Serial.println("[BOOT] loadConfig...");
     loadConfig();
     Serial.println("[BOOT] loadConfig OK");
+    Serial.printf("[BOOT] Touch cal: X=%d..%d  Y=%d..%d\n",
+                  config.calXMin, config.calXMax, config.calYMin, config.calYMax);
 
     // Skip wizard — boot straight to main screen
     config.setupComplete = true;
@@ -1560,6 +1593,11 @@ void saveConfig() {
     preferences.putBool("auto", config.autoBrightness);
     preferences.putBool("baseline", config.showBaseline);
     preferences.putBool("webp", config.enableWebPortal);
+    // Touch calibration
+    preferences.putInt("calXMin", config.calXMin);
+    preferences.putInt("calXMax", config.calXMax);
+    preferences.putInt("calYMin", config.calYMin);
+    preferences.putInt("calYMax", config.calYMax);
     preferences.end();
 }
 
@@ -1573,6 +1611,11 @@ void loadConfig() {
     config.autoBrightness = preferences.getBool("auto", true);
     config.showBaseline = preferences.getBool("baseline", true);
     config.enableWebPortal = preferences.getBool("webp", true);
+    // Touch calibration — default to Fr4nkFletcher CYD_28 validated values
+    config.calXMin = preferences.getInt("calXMin", TOUCH_CAL_X_MIN_DEFAULT);
+    config.calXMax = preferences.getInt("calXMax", TOUCH_CAL_X_MAX_DEFAULT);
+    config.calYMin = preferences.getInt("calYMin", TOUCH_CAL_Y_MIN_DEFAULT);
+    config.calYMax = preferences.getInt("calYMax", TOUCH_CAL_Y_MAX_DEFAULT);
     preferences.end();
 }
 
