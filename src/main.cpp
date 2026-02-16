@@ -832,7 +832,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
         det.priority = (det.relevance == REL_HIGH) ? 4 : (det.relevance == REL_MEDIUM) ? 3 : 2;
     } else {
         det.manufacturer = oui;
-        det.category = "Unknown";
+        det.category = CAT_UNKNOWN;
         det.relevance = REL_LOW;
         det.priority = PRIORITY_BASELINE;
     }
