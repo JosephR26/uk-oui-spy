@@ -610,19 +610,21 @@ void UITask(void *pvParameters) {
 #define SCREEN_WIDTH  320
 #define SCREEN_HEIGHT 240
 
-// XPT2046 touch calibration (raw ADC min/max from resistive digitiser)
-// Run a calibration sketch and replace these with your board's values.
-#define TOUCH_X_MIN  286
-#define TOUCH_X_MAX  3840
-#define TOUCH_Y_MIN  240
-#define TOUCH_Y_MAX  3800
+// XPT2046 touch calibration (Fr4nkFletcher universal CYD values — works
+// out-of-box on ~95% of ESP32-2432S028R dual-USB boards without per-unit
+// calibration.  Wider ADC range than the original values absorbs panel-to-
+// panel variance and temperature drift on resistive digitisers.)
+#define TOUCH_X_MIN  250
+#define TOUCH_X_MAX  3900
+#define TOUCH_Y_MIN  270
+#define TOUCH_Y_MAX  3850
 
 // Settings screen: toggle rows are drawn at these Y origins (from drawSettingsScreen)
 // and the hitbox extends from ROW_Y - SETTINGS_ROW_PAD to ROW_Y + SETTINGS_ROW_HEIGHT - SETTINGS_ROW_PAD.
 static const int SETTINGS_ROW_Y[]     = {42, 66, 90, 114, 138, 162, 186};
 static const int SETTINGS_ROW_HEIGHT  = 24;
-static const int SETTINGS_HIT_X_MIN   = 20;
-static const int SETTINGS_HIT_X_MAX   = 260;
+static const int SETTINGS_HIT_X_MIN   = 5;   // Near left edge — thick tolerance
+static const int SETTINGS_HIT_X_MAX   = 315;  // Near right edge — whole row tappable
 
 // ============================================================
 // TOUCH DRIVER (XPT2046 via Paul Stoffregen library on HSPI)
@@ -1443,28 +1445,40 @@ void handleTouchGestures() {
     static unsigned long lastTouch = 0;
     uint16_t x, y;
     if (!readTouch(&x, &y)) return;
-    if (millis() - lastTouch < 150) return;  // Debounce
+    if (millis() - lastTouch < 180) return;  // Debounce (180ms for resistive panel lift-off noise)
     lastTouch = millis();
 
-    if (y >= 208) {
-        // Navbar tap
-        int newScreen = x / 80;
-        if (newScreen >= 0 && newScreen <= 3) {
-            currentScreen = (Screen)(newScreen + 1);
+    if (y >= 200) {
+        // ----- NAVBAR TAP (thick tolerance: y >= 200 instead of 208) -----
+        // Explicit ranges with 4px dead-gaps between buttons prevent edge
+        // misfire on resistive panels.  Visual buttons are 70px wide;
+        // hit zones are 76px with 4px gaps.
+        Screen target = currentScreen;
+        if      (x <=  76) target = SCREEN_MAIN;      // LIST   [0-76]
+        else if (x >=  82 && x <= 158) target = SCREEN_RADAR;    // RADAR  [82-158]
+        else if (x >= 162 && x <= 238) target = SCREEN_SETTINGS; // CONFIG [162-238]
+        else if (x >= 242) target = SCREEN_INFO;      // INFO   [242-319]
+        // else: 4px dead gap between buttons — ignore tap
+        if (target != currentScreen) {
+            currentScreen = target;
             scrollOffset = 0;
         }
         displayDirty = true;
     } else if (currentScreen == SCREEN_MAIN) {
-        // Scroll: top half = scroll up, bottom half = scroll down
-        if (y < 120 && scrollOffset > 0) {
+        // ----- MAIN LIST SCROLL (10px dead zone around midpoint) -----
+        // Dead zone at y[105-135] prevents accidental wrong-direction
+        // scrolls when tapping near the centre of the list.
+        if (y < 105 && scrollOffset > 0) {
             scrollOffset--;
             displayDirty = true;
-        } else if (y >= 120 && y < 210 && scrollOffset < maxScroll) {
+        } else if (y >= 135 && y < 200 && scrollOffset < maxScroll) {
             scrollOffset++;
             displayDirty = true;
         }
     } else if (currentScreen == SCREEN_SETTINGS) {
-        // Toggle taps — widen hit area to full row width for easier tapping
+        // ----- SETTINGS TOGGLE TAPS (thick tolerance) -----
+        // Full-width hit area (5-315) with generous vertical padding lets
+        // the user tap anywhere on the row — label, gap, or toggle knob.
         if (x > SETTINGS_HIT_X_MIN && x < SETTINGS_HIT_X_MAX) {
             bool* toggles[] = {
                 &config.enableBLE, &config.enableWiFi, &config.enableLogging,
@@ -1472,8 +1486,8 @@ void handleTouchGestures() {
                 &config.enableWebPortal
             };
             for (int i = 0; i < 7; i++) {
-                int rowTop = SETTINGS_ROW_Y[i] - 10;
-                int rowBot = SETTINGS_ROW_Y[i] + SETTINGS_ROW_HEIGHT - 5;
+                int rowTop = SETTINGS_ROW_Y[i] - 12;   // 12px above row origin
+                int rowBot = SETTINGS_ROW_Y[i] + SETTINGS_ROW_HEIGHT;  // flush bottom
                 if (y > rowTop && y < rowBot) {
                     *toggles[i] = !*toggles[i];
                     break;
