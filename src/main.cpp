@@ -610,6 +610,13 @@ void UITask(void *pvParameters) {
 #define SCREEN_WIDTH  320
 #define SCREEN_HEIGHT 240
 
+// XPT2046 touch calibration (raw ADC min/max from resistive digitiser)
+// Run a calibration sketch and replace these with your board's values.
+#define TOUCH_X_MIN  286
+#define TOUCH_X_MAX  3840
+#define TOUCH_Y_MIN  240
+#define TOUCH_Y_MAX  3800
+
 // Settings screen: toggle rows are drawn at these Y origins (from drawSettingsScreen)
 // and the hitbox extends from ROW_Y - SETTINGS_ROW_PAD to ROW_Y + SETTINGS_ROW_HEIGHT - SETTINGS_ROW_PAD.
 static const int SETTINGS_ROW_Y[]     = {42, 66, 90, 114, 138, 162, 186};
@@ -628,8 +635,8 @@ bool readTouch(uint16_t *x, uint16_t *y) {
         TS_Point p = touchscreen.getPoint();
 
         // Map raw coordinates to screen pixels
-        *x = map(p.x, 200, 3700, 0, SCREEN_WIDTH);
-        *y = map(p.y, 240, 3800, 0, SCREEN_HEIGHT);
+        *x = map(p.x, TOUCH_X_MIN, TOUCH_X_MAX, 0, SCREEN_WIDTH);
+        *y = map(p.y, TOUCH_Y_MIN, TOUCH_Y_MAX, 0, SCREEN_HEIGHT);
 
         *x = constrain(*x, 0, SCREEN_WIDTH - 1);
         *y = constrain(*y, 0, SCREEN_HEIGHT - 1);
