@@ -42,7 +42,7 @@
 // HARDWARE PIN DEFINITIONS
 // ============================================================
 
-// XPT2046 resistive touch on VSPI
+// XPT2046 resistive touch on HSPI (display uses VSPI internally via TFT_eSPI)
 #define XPT2046_IRQ  36
 #define XPT2046_MOSI 32
 #define XPT2046_MISO 39
@@ -73,7 +73,7 @@
 #define BOOT_BTN 0    // BOOT button (active LOW, has internal pull-up)
 
 SPIClass sdSPI(VSPI);
-SPIClass touchscreenSPI = SPIClass(VSPI);
+SPIClass touchscreenSPI(HSPI);
 XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
 
 // ============================================================
@@ -618,7 +618,7 @@ static const int SETTINGS_HIT_X_MIN   = 20;
 static const int SETTINGS_HIT_X_MAX   = 260;
 
 // ============================================================
-// TOUCH DRIVER (XPT2046 via Paul Stoffregen library on VSPI)
+// TOUCH DRIVER (XPT2046 via Paul Stoffregen library on HSPI)
 // ============================================================
 
 bool readTouch(uint16_t *x, uint16_t *y) {
@@ -634,7 +634,9 @@ bool readTouch(uint16_t *x, uint16_t *y) {
         *x = constrain(*x, 0, SCREEN_WIDTH - 1);
         *y = constrain(*y, 0, SCREEN_HEIGHT - 1);
 
+        #ifdef DEBUG_TOUCH
         Serial.printf("TOUCH: raw(%d,%d,%d) mapped(%u,%u)\n", p.x, p.y, p.z, *x, *y);
+        #endif
         lastInteractionTime = millis();
         return true;
     }
@@ -724,7 +726,7 @@ void initTouch() {
     touchscreen.begin(touchscreenSPI);
     touchscreen.setRotation(1);
     touchAvailable = true;
-    Serial.println("XPT2046 touch initialized (VSPI: MOSI=32 MISO=39 CLK=25 CS=33 IRQ=36)");
+    Serial.println("XPT2046 touch initialized (HSPI: MOSI=32 MISO=39 CLK=25 CS=33 IRQ=36)");
 }
 
 void initSDCard() {
