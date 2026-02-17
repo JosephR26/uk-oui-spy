@@ -433,8 +433,8 @@ bool loadPriorityDB(const char* path) {
     File file = SD.open(path);
     if (!file) return false;
 
-    // Allocate JSON document (adjust size for your DB)
-    DynamicJsonDocument doc(16384);
+    // Allocate JSON document — 65536 supports 183-entry priority.json
+    DynamicJsonDocument doc(65536);
     DeserializationError error = deserializeJson(doc, file);
     file.close();
 
@@ -502,8 +502,7 @@ void initializeStaticPriorityDB() {
     priorityDB.push_back({"E0:50:8B", "Genetec", "Facial recognition", "genetec_net", 5, 0.96});
     priorityDB.push_back({"00:18:7D", "Pelco (Motorola)", "Police/transport CCTV", "pelco_net", 5, 0.95});
     priorityDB.push_back({"D8:60:CF", "Smart Dashcam", "Delivery/bodycam", "vehicle_cam", 3, 0.90});
-    priorityDB.push_back({"74:83:C2", "GoPro", "Action cams/bodycam", "gopro_cam", 3, 0.92});
-    priorityDB.push_back({"28:87:BA", "GoPro", "Action cams (alt OUI)", "gopro_cam", 3, 0.92});
+    priorityDB.push_back({"28:87:BA", "GoPro", "Action cams/bodycam", "gopro_cam", 3, 0.92});
     priorityDB.push_back({"6C:C2:17", "Dahua Technology", "Security cameras", "dahua_net", 5, 0.97});
     priorityDB.push_back({"B0:A7:B9", "Reolink", "WiFi cameras", "reolink_cam", 3, 0.88});
     priorityDB.push_back({"50:C7:BF", "TP-Link Tapo", "Tapo cameras", "tplink_cam", 2, 0.85});
@@ -1147,6 +1146,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
     // Enrich with priority database
     auto priIt = priorityLookup.find(oui);
     if (priIt != priorityLookup.end()) {
+        if (!det.manufacturer.length()) totalMatched++;  // count stage-2 only hits
         det.manufacturer = priIt->second->label;
         det.context = priIt->second->context;
         det.correlationGroup = priIt->second->correlationGroup;
