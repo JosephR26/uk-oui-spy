@@ -62,10 +62,10 @@
 // Stored in NVS via saveConfig/loadConfig so they survive reboot
 // and can be updated in the field without reflashing.
 // ============================================================
-#define TOUCH_CAL_X_MIN_DEFAULT   665
-#define TOUCH_CAL_X_MAX_DEFAULT  3908
-#define TOUCH_CAL_Y_MIN_DEFAULT   350
-#define TOUCH_CAL_Y_MAX_DEFAULT  3465
+#define TOUCH_CAL_X_MIN_DEFAULT   244   // measured: TL px  (left edge)
+#define TOUCH_CAL_X_MAX_DEFAULT  3742   // measured: BR px  (right edge)
+#define TOUCH_CAL_Y_MIN_DEFAULT   333   // measured: TL py  (top edge)
+#define TOUCH_CAL_Y_MAX_DEFAULT  3348   // measured: BL py  (bottom edge)
 
 // Backlight polarity (derived from platformio.ini)
 #ifndef TFT_BACKLIGHT_ON
@@ -647,11 +647,11 @@ static const int SETTINGS_HIT_X_MAX   = 260;
 //   { 350, 3465, 188, 3431, 2 }
 //   raw_x: 350–3465  raw_y: 188–3431  flags: y-inverted
 //
-// XPT2046_Touchscreen rotation=1 transforms raw ADC as:
-//   p.x = 4096 - raw_y  →  665 to 3908  →  screen X (0 to 319)
-//   p.y = raw_x          →  350 to 3465  →  screen Y (0 to 239)
+// XPT2046_Touchscreen at rotation=1 (empirically verified with 4-corner cal):
+//   p.x  →  screen X (horizontal): left≈244, right≈3742
+//   p.y  →  screen Y (vertical):   top≈333,  bottom≈3348
 //
-// config.calX/YMin/Max loaded from NVS (defaults = Fr4nkFletcher values).
+// config.calX/YMin/Max loaded from NVS (defaults = device-measured values).
 // ============================================================
 
 bool readTouch(uint16_t *x, uint16_t *y) {
@@ -660,12 +660,14 @@ bool readTouch(uint16_t *x, uint16_t *y) {
     if (touchscreen.tirqTouched() && touchscreen.touched()) {
         TS_Point p = touchscreen.getPoint();
 
-        // Map rotated raw coordinates to screen pixels (NVS-backed cal values)
-        *x = map(p.x, config.calXMin, config.calXMax, 0, SCREEN_WIDTH);
-        *y = map(p.y, config.calYMin, config.calYMax, 0, SCREEN_HEIGHT);
-
-        *x = constrain(*x, 0, SCREEN_WIDTH - 1);
-        *y = constrain(*y, 0, SCREEN_HEIGHT - 1);
+        // Empirically verified (4-corner calibration): p.x→screen X, p.y→screen Y.
+        // Use signed long intermediates: map() can return negative values when the raw
+        // reading is outside the calibrated range; assigning a negative long to uint16_t
+        // wraps it to ~65000, causing constrain() to clamp to the wrong edge.
+        long mx = map(p.x, config.calXMin, config.calXMax, 0, SCREEN_WIDTH);
+        long my = map(p.y, config.calYMin, config.calYMax, 0, SCREEN_HEIGHT);
+        *x = (uint16_t)constrain(mx, 0L, (long)(SCREEN_WIDTH  - 1));
+        *y = (uint16_t)constrain(my, 0L, (long)(SCREEN_HEIGHT - 1));
 
         Serial.printf("TOUCH: raw(%d,%d,%d) mapped(%u,%u)\n", p.x, p.y, p.z, *x, *y);
         lastInteractionTime = millis();
