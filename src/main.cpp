@@ -318,7 +318,8 @@ unsigned long lastScanTime = 0;
 unsigned long lastInteractionTime = 0;
 int scanInterval = 5000;
 bool scanning = false;
-char sessionId[10] = "----";   // generated at boot from esp_random()
+char sessionId[10] = "----";      // generated at boot from esp_random()
+char sessionLogPath[32] = "/detections.csv";  // set to /sessions/XXXX-XXXX.csv after SD init
 
 // ============================================================
 // SD OUI LOOKUP  (binary search on /oui.bin — 35 bytes/record)
@@ -971,6 +972,11 @@ void setup() {
 
     Serial.println("[BOOT] initSDCard...");
     initSDCard();
+    if (sdCardAvailable) {
+        SD.mkdir("/sessions");
+        snprintf(sessionLogPath, sizeof(sessionLogPath), "/sessions/%s.csv", sessionId);
+        Serial.printf("[BOOT] Log path: %s\n", sessionLogPath);
+    }
     Serial.println("[BOOT] initSDCard OK");
     bootTag("Initialising SD card",
             sdCardAvailable ? "ONLINE" : "OFFLINE",
@@ -1163,8 +1169,8 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
     // Log to SD card
     if (config.enableLogging && sdCardAvailable) {
         // Write CSV header on first entry
-        bool needHeader = !SD.exists("/detections.csv");
-        File f = SD.open("/detections.csv", FILE_APPEND);
+        bool needHeader = !SD.exists(sessionLogPath);
+        File f = SD.open(sessionLogPath, FILE_APPEND);
         if (f) {
             if (needHeader) {
                 f.println("timestamp_ms,mac,protocol,manufacturer,company,ssid,category,priority,rssi,sightings");
@@ -1332,11 +1338,11 @@ void setupWebServer() {
 
     // API: Get raw logs (last 50 lines)
     webServer.on("/api/logs", HTTP_GET, [](AsyncWebServerRequest *req){
-        if (!sdCardAvailable || !SD.exists("/detections.csv")) {
+        if (!sdCardAvailable || !SD.exists(sessionLogPath)) {
             req->send(200, "text/plain", "No log data available.");
             return;
         }
-        File f = SD.open("/detections.csv");
+        File f = SD.open(sessionLogPath);
         if (!f) { req->send(500, "text/plain", "Error reading log."); return; }
         String content = "";
         int lines = 0;
