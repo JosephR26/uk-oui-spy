@@ -158,17 +158,73 @@ struct CorrelationAlert {
     unsigned long timestamp;
 };
 
+// BLE extra data extracted from advertisement packet
+struct BLEMeta {
+    String company;      // from manufacturer specific data (2-byte BT SIG company ID)
+    String svcHint;      // classified from 16-bit service UUIDs
+    int8_t txPower = 0;
+    bool hasTxPower = false;
+    bool publicAddr = false;   // true = public/OUI-resolvable, false = random
+};
+
+// Bluetooth SIG assigned company IDs (most common consumer/surveillance relevant)
+struct BTCompany { uint16_t id; const char* name; };
+static const BTCompany BT_COMPANY_DB[] = {
+    {0x0002,"Intel"},          {0x0006,"Microsoft"},     {0x000F,"Broadcom"},
+    {0x0013,"Texas Instruments"},{0x0019,"Qualcomm"},    {0x0024,"STMicro"},
+    {0x0046,"Parrot"},         {0x0059,"Nordic Semi"},   {0x0075,"Samsung"},
+    {0x0082,"Marvell"},        {0x0087,"Garmin"},        {0x004C,"Apple"},
+    {0x00CF,"Fitbit"},         {0x00E0,"Google"},        {0x00F8,"Huawei"},
+    {0x0102,"Tile Tracker"},   {0x010F,"Murata"},        {0x0117,"Sonos"},
+    {0x011B,"Amazon"},         {0x0135,"Sony"},          {0x0138,"Xiaomi"},
+    {0x0157,"Samsung"},        {0x01FF,"Suunto"},        {0x02E5,"Espressif"},
+    {0x033F,"Sony"},           {0x0344,"OPPO"},          {0x038F,"Google"},
+    {0x048F,"Bosch"},          {0x04FE,"Xiaomi"},        {0x0499,"Ruuvi"},
+    {0x06BE,"DJI"},            {0x1049,"DJI Drone"},
+};
+static const int BT_COMPANY_COUNT = sizeof(BT_COMPANY_DB)/sizeof(BT_COMPANY_DB[0]);
+
+String lookupBTCompany(uint16_t id) {
+    for (int i = 0; i < BT_COMPANY_COUNT; i++) {
+        if (BT_COMPANY_DB[i].id == id) return String(BT_COMPANY_DB[i].name);
+    }
+    return "";
+}
+
+// Map common 16-bit BLE service UUIDs to human-readable device type hints
+String getBLESvcHint(uint16_t uuid) {
+    switch (uuid) {
+        case 0x1812: return "Input Device";
+        case 0x180D: return "Wearable";
+        case 0x1816: return "Cycling";
+        case 0x1819: return "GPS/Location";
+        case 0x181A: return "Env Sensor";
+        case 0x180F: return "Battery Dev";
+        case 0x1826: return "Fitness";
+        case 0xFD5A: return "Tile Tracker";
+        case 0xFD6F: return "Apple Proximity";
+        case 0xFE9F: return "Google Nearby";
+        case 0xFEAA: return "Eddystone Beacon";
+        default:     return "";
+    }
+}
+
 // Enhanced detection with priority
 struct Detection {
     String macAddress;
     String manufacturer;
-    String ssid;           // WiFi SSID or BLE advertised name (empty if not broadcast)
+    String ssid;           // WiFi SSID or BLE advertised name
+    String bleCompany;     // BT SIG company (from manufacturer specific data)
+    String bleSvcHint;     // classified from service UUIDs
     String context;
     String correlationGroup;
     DeviceCategory category;
     RelevanceLevel relevance;
     int priority;
     int8_t rssi;
+    int8_t txPower = 0;
+    bool hasTxPower = false;
+    bool blePublicAddr = false;
     unsigned long timestamp;
     unsigned long firstSeen;
     int sightings;
@@ -296,7 +352,7 @@ void initWiFi();
 void initSDCard();
 void scanBLE();
 void scanWiFi();
-void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name = "");
+void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name = "", BLEMeta* bleMeta = nullptr);
 void addDetection(Detection det);
 void updateDisplay();
 void drawWizardScreen();
@@ -581,8 +637,42 @@ int getTierStars(int priority) {
 
 class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
     void onResult(NimBLEAdvertisedDevice* advertisedDevice) {
-        String bleName = advertisedDevice->getName().c_str();
-        checkOUI(advertisedDevice->getAddress().toString().c_str(), advertisedDevice->getRSSI(), true, bleName);
+        BLEMeta meta;
+
+        // Device name
+        String bleName = advertisedDevice->haveName() ? advertisedDevice->getName().c_str() : "";
+
+        // Manufacturer specific data → Bluetooth SIG company ID
+        if (advertisedDevice->haveManufacturerData()) {
+            std::string mfrData = advertisedDevice->getManufacturerData();
+            if (mfrData.size() >= 2) {
+                uint16_t companyId = (uint8_t)mfrData[0] | ((uint8_t)mfrData[1] << 8);
+                meta.company = lookupBTCompany(companyId);
+                if (meta.company.isEmpty()) {
+                    char buf[8]; snprintf(buf, sizeof(buf), "BT:%04X", companyId);
+                    meta.company = String(buf);
+                }
+            }
+        }
+
+        // Service UUIDs → device type hint
+        for (int i = 0; i < (int)advertisedDevice->getServiceUUIDCount(); i++) {
+            NimBLEUUID u = advertisedDevice->getServiceUUID(i);
+            if (u.bitSize() == 16) {
+                meta.svcHint = getBLESvcHint(u.getNative()->u16.value);
+                if (!meta.svcHint.isEmpty()) break;
+            }
+        }
+
+        // TX power (for distance estimate)
+        meta.hasTxPower = advertisedDevice->haveTXPower();
+        if (meta.hasTxPower) meta.txPower = (int8_t)advertisedDevice->getTXPower();
+
+        // Address type
+        meta.publicAddr = (advertisedDevice->getAddressType() == BLE_ADDR_PUBLIC);
+
+        checkOUI(advertisedDevice->getAddress().toString().c_str(),
+                 advertisedDevice->getRSSI(), true, bleName, &meta);
     }
 };
 
@@ -858,7 +948,7 @@ void scanWiFi() {
 // OUI CHECK WITH PRIORITY ENRICHMENT
 // ============================================================
 
-void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name) {
+void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* bleMeta) {
     String mac = macAddress;
     mac.toUpperCase();
     String oui = mac.substring(0, 8);
@@ -874,6 +964,13 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name) {
     det.isBLE = isBLE;
     det.context = "";
     det.correlationGroup = "";
+    if (isBLE && bleMeta) {
+        det.bleCompany    = bleMeta->company;
+        det.bleSvcHint    = bleMeta->svcHint;
+        det.txPower       = bleMeta->txPower;
+        det.hasTxPower    = bleMeta->hasTxPower;
+        det.blePublicAddr = bleMeta->publicAddr;
+    }
 
     // Check OUI database
     const OUIEntry* entry = findOUI(oui);
@@ -887,12 +984,23 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name) {
     } else {
         int firstByte = strtol(oui.substring(0, 2).c_str(), nullptr, 16);
         if (firstByte & 0x02) {
-            // Locally-administered bit set = randomised / private MAC (phones, laptops)
-            det.manufacturer = "Randomised MAC";
+            // Locally-administered bit = randomised/private MAC
+            // Use BT company ID as manufacturer if available (works even with random MAC)
+            if (isBLE && bleMeta && !bleMeta->company.isEmpty()) {
+                det.manufacturer = bleMeta->company;
+            } else {
+                det.manufacturer = "Randomised MAC";
+            }
         } else {
-            // Real OUI — try full IEEE database on SD card
+            // Real OUI: try SD IEEE database, then fall back to raw OUI prefix
             String sdName = sdLookupOUI(oui);
-            det.manufacturer = sdName.isEmpty() ? oui : sdName;
+            if (!sdName.isEmpty()) {
+                det.manufacturer = sdName;
+            } else if (isBLE && bleMeta && !bleMeta->company.isEmpty()) {
+                det.manufacturer = bleMeta->company;  // BT company as extra fallback
+            } else {
+                det.manufacturer = oui;
+            }
         }
         det.category = CAT_UNKNOWN;
         det.relevance = REL_LOW;
@@ -1228,42 +1336,71 @@ void drawMainScreen() {
             if (y >= 200) break;
         }
 
-        // Draw detection card
+        // ── Intelligence card (3-line, 42px) ──────────────────
         uint16_t cardBg = (det.priority >= PRIORITY_CRITICAL) ? COL_CARD_HI : COL_CARD;
-        tft.fillRoundRect(5, y, 310, 30, 3, cardBg);
+        tft.fillRoundRect(5, y, 310, 42, 3, cardBg);
 
-        // Priority colour bar on left edge
-        tft.fillRect(5, y, 4, 30, getTierColor(det.priority));
+        // Priority colour bar (6px — clearly visible)
+        tft.fillRect(5, y, 6, 42, getTierColor(det.priority));
 
-        // Protocol badge
-        uint16_t badgeCol = det.isBLE ? 0x001F : 0x07E0;  // Blue for BLE, Green for WiFi
-        tft.fillRoundRect(270, y + 3, 40, 12, 2, badgeCol);
+        // Protocol badge (top-right)
+        uint16_t badgeCol = det.isBLE ? 0x001F : 0x07E0;
+        tft.fillRoundRect(265, y + 2, 42, 12, 2, badgeCol);
         tft.setTextSize(1);
         tft.setTextColor(TFT_WHITE);
-        tft.setCursor(275, y + 5);
-        tft.print(det.isBLE ? "BLE" : "WiFi");
+        tft.setCursor(269, y + 4);
+        tft.print(det.isBLE ? " BLE" : "WiFi");
 
-        // Manufacturer name
-        tft.setTextSize(1);
-        tft.setTextColor(TFT_WHITE);
-        tft.setCursor(14, y + 4);
-        String displayName = det.manufacturer;
-        if (displayName.length() > 28) displayName = displayName.substring(0, 25) + "...";
-        tft.print(displayName);
+        // Line 1 — Primary identifier (tier-coloured so risk is immediately visible)
+        // For BLE: prefer company name over raw OUI; for WiFi: SSID if manufacturer unknown
+        bool rawOUI = (det.manufacturer.length() == 8 && det.manufacturer[2] == ':');
+        String primaryName = (!rawOUI || det.ssid.isEmpty()) ? det.manufacturer : det.ssid;
+        if (primaryName.length() > 26) primaryName = primaryName.substring(0, 23) + "...";
+        tft.setTextColor(getTierColor(det.priority));
+        tft.setCursor(15, y + 4);
+        tft.print(primaryName);
 
-        // Second line: SSID/BLE name (if known) or MAC prefix + RSSI + sightings
+        // Line 2 — Device type / context + RSSI (+ distance for BLE with TX power)
         tft.setTextColor(COL_DIMTEXT);
-        tft.setCursor(14, y + 17);
-        if (!det.ssid.isEmpty()) {
-            String s = det.ssid;
-            if (s.length() > 20) s = s.substring(0, 18) + "..";
-            tft.printf("%-20s %ddBm", s.c_str(), det.rssi);
-        } else {
-            tft.printf("%s  %ddBm", det.macAddress.substring(0, 8).c_str(), det.rssi);
-        }
-        if (det.sightings > 1) tft.printf("  x%d", det.sightings);
+        tft.setCursor(15, y + 16);
+        // Choose best descriptor: service hint > category > SSID (if not on line 1) > BLE company
+        String typeStr = "";
+        if (!det.bleSvcHint.isEmpty())                              typeStr = det.bleSvcHint;
+        else if (det.category != CAT_UNKNOWN)                       typeStr = getCategoryName(det.category);
+        else if (!det.ssid.isEmpty() && !rawOUI)                    typeStr = det.ssid;
+        else if (!det.bleCompany.isEmpty() && det.bleCompany != det.manufacturer) typeStr = det.bleCompany;
+        else                                                        typeStr = "Unknown";
+        if (typeStr.length() > 14) typeStr = typeStr.substring(0, 12) + "..";
 
-        y += 33;
+        if (det.isBLE && det.hasTxPower) {
+            // Estimated distance: d = 10^((TxPower - RSSI) / 20)
+            float dist = pow(10.0f, ((float)det.txPower - (float)det.rssi) / 20.0f);
+            tft.printf("%-14s %ddBm ~%.0fm", typeStr.c_str(), det.rssi,
+                       dist < 100.0f ? dist : 99.0f);
+        } else {
+            tft.printf("%-14s %ddBm", typeStr.c_str(), det.rssi);
+        }
+
+        // Line 3 — Full MAC + address type flag + age + sightings
+        unsigned long ageSec = (millis() - det.timestamp) / 1000;
+        String ageStr = (ageSec < 60)   ? String(ageSec) + "s" :
+                        (ageSec < 3600) ? String(ageSec / 60) + "m" :
+                                          String(ageSec / 3600) + "h";
+        tft.setTextColor(0x4A49);
+        tft.setCursor(15, y + 29);
+        tft.print(det.macAddress);
+        // Address type indicator for BLE
+        if (det.isBLE) {
+            tft.setTextColor(det.blePublicAddr ? 0x07E0 : 0xFD20); // green=public, orange=random
+            tft.setCursor(130, y + 29);
+            tft.print(det.blePublicAddr ? " PUB" : " RND");
+        }
+        tft.setTextColor(0x4A49);
+        tft.setCursor(195, y + 29);
+        tft.printf("%s", ageStr.c_str());
+        if (det.sightings > 1) { tft.setCursor(235, y + 29); tft.printf("x%d", det.sightings); }
+
+        y += 45;
         itemIndex++;
     }
 
