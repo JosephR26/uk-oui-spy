@@ -287,6 +287,9 @@ struct Detection {
     unsigned long firstSeen;
     int sightings;
     bool isBLE;
+    DeploymentType deployment = DEPLOY_PRIVATE;
+    float confidence = 0.0f;
+    uint8_t channel = 0;      // WiFi channel (0 = unknown/BLE)
 };
 
 struct Config {
@@ -416,7 +419,7 @@ void initWiFi();
 void initSDCard();
 void scanBLE();
 void scanWiFi();
-void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name = "", BLEMeta* bleMeta = nullptr);
+void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name = "", BLEMeta* bleMeta = nullptr, uint8_t channel = 0);
 void addDetection(Detection det);
 void updateDisplay();
 void drawWizardScreen();
@@ -752,7 +755,7 @@ void onPromiscuousPacket(const uint8_t* mac, int8_t rssi, uint8_t channel) {
     char macStr[18];
     snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    checkOUI(String(macStr), rssi, false);
+    checkOUI(String(macStr), rssi, false, "", nullptr, channel);
 }
 
 // ============================================================
@@ -1156,7 +1159,7 @@ void scanWiFi() {
 // OUI CHECK WITH PRIORITY ENRICHMENT
 // ============================================================
 
-void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* bleMeta) {
+void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* bleMeta, uint8_t channel) {
     String mac = macAddress;
     mac.toUpperCase();
     String oui = mac.substring(0, 8);
@@ -1172,6 +1175,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
     det.isBLE = isBLE;
     det.context = "";
     det.correlationGroup = "";
+    det.channel = channel;
     if (isBLE && bleMeta) {
         det.bleCompany    = bleMeta->company;
         det.bleSvcHint    = bleMeta->svcHint;
@@ -1188,6 +1192,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
         det.manufacturer = entry->manufacturer;
         det.category = entry->category;
         det.relevance = entry->relevance;
+        det.deployment = entry->deployment;
         det.priority = (det.relevance == REL_HIGH) ? 4 : (det.relevance == REL_MEDIUM) ? 3 : 2;
     } else {
         int firstByte = strtol(oui.substring(0, 2).c_str(), nullptr, 16);
@@ -1223,6 +1228,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
         det.context = priIt->second->context;
         det.correlationGroup = priIt->second->correlationGroup;
         det.priority = priIt->second->priority;
+        det.confidence = priIt->second->confidence;
     }
 
     // BLE company-based surveillance boost — catches randomised-MAC devices
@@ -1367,6 +1373,10 @@ void setupWebServer() {
             obj["firstSeen"]     = d.firstSeen;
             obj["lastSeen"]      = d.timestamp;
             obj["ageSec"]        = (millis() - d.timestamp) / 1000;
+            obj["dwellSec"]      = (millis() - d.firstSeen) / 1000;
+            obj["deployment"]    = getDeploymentName(d.deployment);
+            obj["confidence"]    = d.confidence;
+            obj["channel"]       = d.channel;
         }
         doc["highCount"] = highCount;
         String response;
@@ -1713,11 +1723,11 @@ void drawMainScreen() {
             tft.printf("%-14s %ddBm", typeStr.c_str(), det.rssi);
         }
 
-        // Line 3 — Full MAC + address type flag + age + sightings
-        unsigned long ageSec = (millis() - det.timestamp) / 1000;
-        String ageStr = (ageSec < 60)   ? String(ageSec) + "s" :
-                        (ageSec < 3600) ? String(ageSec / 60) + "m" :
-                                          String(ageSec / 3600) + "h";
+        // Line 3 — MAC + address type + dwell time + sightings + confidence
+        unsigned long dwellSec = (millis() - det.firstSeen) / 1000;
+        String dwellStr = (dwellSec < 60)   ? String(dwellSec) + "s" :
+                          (dwellSec < 3600) ? String(dwellSec / 60) + "m" :
+                                              String(dwellSec / 3600) + "h";
         tft.setTextColor(0x4A49);
         tft.setCursor(15, y + 29);
         tft.print(det.macAddress);
@@ -1729,8 +1739,14 @@ void drawMainScreen() {
         }
         tft.setTextColor(0x4A49);
         tft.setCursor(195, y + 29);
-        tft.printf("%s", ageStr.c_str());
-        if (det.sightings > 1) { tft.setCursor(235, y + 29); tft.printf("x%d", det.sightings); }
+        tft.printf("%s", dwellStr.c_str());
+        if (det.sightings > 1) { tft.setCursor(227, y + 29); tft.printf("x%d", det.sightings); }
+        // Confidence % for priority DB hits with meaningful confidence
+        if (det.confidence >= 0.7f) {
+            tft.setTextColor(getTierColor(det.priority));
+            tft.setCursor(265, y + 29);
+            tft.printf("%d%%", (int)(det.confidence * 100));
+        }
 
         y += 45;
         itemIndex++;
