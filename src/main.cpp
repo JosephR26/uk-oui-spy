@@ -1982,81 +1982,128 @@ void drawRadarScreen() {
     tft.fillScreen(COL_BG);
     drawHeader("PROXIMITY RADAR");
 
-    int cx = 160, cy = 118, r = 80;
+    // Use the full usable area: 320 wide, y 26..198 (header 26px, navbar 18px)
+    int cx = 155, cy = 112, r = 88;
 
-    // Radar rings with distance labels
+    // ── Radar grid ──────────────────────────────────────────
+    // Diagonal 45° guide lines (very subtle)
+    uint16_t dimGrid = 0x0300;  // very dark green-tinted
+    tft.drawLine(cx - r, cy - r, cx + r, cy + r, dimGrid);
+    tft.drawLine(cx + r, cy - r, cx - r, cy + r, dimGrid);
+
+    // Three concentric rings, brightest on outside
+    uint16_t ringCols[3] = { 0x0340, 0x0460, 0x0580 };  // dark→mid phosphor green
     for (int ring = 1; ring <= 3; ring++) {
         int rr = (r * ring) / 3;
-        tft.drawCircle(cx, cy, rr, 0x1082);
+        tft.drawCircle(cx, cy, rr, ringCols[ring - 1]);
     }
-    // Crosshairs
-    tft.drawLine(cx - r, cy, cx + r, cy, 0x1082);
-    tft.drawLine(cx, cy - r, cx, cy + r, 0x1082);
 
-    // Distance labels
+    // Crosshairs — brighter than rings
+    uint16_t crossCol = 0x05A0;
+    tft.drawLine(cx - r, cy, cx + r, cy, crossCol);
+    tft.drawLine(cx, cy - r, cx, cy + r, crossCol);
+
+    // Distance labels — bright phosphor green
     tft.setTextSize(1);
-    tft.setTextColor(0x4208);
-    tft.setCursor(cx + r/3 + 2, cy + 2); tft.print("10m");
-    tft.setCursor(cx + 2*r/3 + 2, cy + 2); tft.print("30m");
-    tft.setCursor(cx + r + 2, cy + 2); tft.print("50m+");
+    tft.setTextColor(0x07C0);  // bright green, readable on black
+    tft.setCursor(cx + r/3 + 3,  cy + 3); tft.print("10m");
+    tft.setCursor(cx + 2*r/3 + 3, cy + 3); tft.print("30m");
+    tft.setCursor(cx + r + 3,     cy + 3); tft.print("50m+");
 
-    // Centre dot (you)
-    tft.fillCircle(cx, cy, 3, COL_ACCENT);
+    // Centre marker — pulsing-look: filled cyan dot with white centre
+    tft.fillCircle(cx, cy, 5, COL_ACCENT);
+    tft.fillCircle(cx, cy, 2, TFT_WHITE);
 
+    // ── Device count badge (top-right of radar area) ─────────
     // Plot detections
     xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
     auto snapshot = detections;
     xSemaphoreGive(xDetectionMutex);
 
+    int visibleCount = 0;
+    for (auto& det : snapshot) {
+        if (config.showBaseline || det.priority > PRIORITY_BASELINE) visibleCount++;
+    }
+    tft.setTextSize(1);
+    tft.setTextColor(COL_DIMTEXT);
+    tft.setCursor(cx + r + 3, 30);
+    tft.printf("%d dev", visibleCount);
+
+    // ── Plot each detection ──────────────────────────────────
     for (auto& det : snapshot) {
         if (det.priority <= PRIORITY_BASELINE) continue;
 
-        // Distance from RSSI
-        float dist = map(constrain(det.rssi, -100, -30), -30, -100, 5, r);
+        // Map RSSI → pixel distance (closer RSSI = shorter distance = inner ring)
+        float dist = (float)map(constrain(det.rssi, -100, -30), -30, -100, 6, r - 4);
 
-        // Deterministic angle from MAC hash
+        // Deterministic angle from MAC hash — stable across redraws
         unsigned long hash = 0;
         for (char c : det.macAddress) hash = hash * 31 + c;
-        float angle = (float)(hash % 360) * PI / 180.0;
+        float angle = (float)(hash % 360) * (PI / 180.0f);
 
-        int px = cx + (int)(dist * cos(angle));
-        int py = cy + (int)(dist * sin(angle));
+        int px = cx + (int)(dist * cosf(angle));
+        int py = cy + (int)(dist * sinf(angle));
 
-        // Draw device dot sized by priority
-        int dotSize = (det.priority >= 4) ? 5 : 3;
-        tft.fillCircle(px, py, dotSize, getTierColor(det.priority));
+        // Dot size: tier 5=8, tier 4=6, tier 3=5, lower=4
+        int dotSize = (det.priority >= 5) ? 8 :
+                      (det.priority >= 4) ? 6 :
+                      (det.priority >= 3) ? 5 : 4;
 
-        // Label for high-value targets
+        uint16_t col = getTierColor(det.priority);
+
+        // Halo ring for high-priority targets so they stand out from the grid
+        if (det.priority >= PRIORITY_HIGH) {
+            tft.drawCircle(px, py, dotSize + 2, col);
+        }
+        tft.fillCircle(px, py, dotSize, col);
+
+        // BLE/WiFi type indicator: small inner dot
+        uint16_t innerCol = det.isBLE ? 0xF81F : TFT_WHITE;  // magenta=BLE, white=WiFi
+        tft.fillCircle(px, py, 1, innerCol);
+
+        // Label for high-priority targets (priority >= HIGH)
         if (det.priority >= PRIORITY_HIGH) {
             tft.setTextSize(1);
-            tft.setTextColor(getTierColor(det.priority));
-            String shortName = det.manufacturer.substring(0, 8);
-            tft.setCursor(px + dotSize + 2, py - 3);
-            tft.print(shortName);
+            tft.setTextColor(col);
+            // Abbreviate to avoid overlap — 7 chars max
+            String label = det.manufacturer.length() > 0
+                ? det.manufacturer.substring(0, 7)
+                : det.macAddress.substring(9);
+            // Nudge label away from centre to avoid overlap with dot
+            int lx = px + dotSize + 3;
+            int ly = py - 4;
+            // Keep label within screen bounds
+            if (lx + 42 > 310) lx = px - 45;
+            if (ly < 28) ly = py + dotSize + 1;
+            tft.setCursor(lx, ly);
+            tft.print(label);
         }
     }
 
-    // Empty state for radar
-    bool hasVisibleDevices = false;
-    for (auto& det : snapshot) {
-        if (det.priority > PRIORITY_BASELINE) {
-            hasVisibleDevices = true;
-            break;
-        }
-    }
-    if (!hasVisibleDevices) {
+    // ── Empty state ──────────────────────────────────────────
+    if (visibleCount == 0) {
         tft.setTextSize(1);
-        tft.setTextColor(COL_DIMTEXT);
-        tft.setCursor(cx - 45, cy + 45);
-        tft.print("No devices in range");
+        tft.setTextColor(0x05A0);  // same phosphor green as crosshairs
+        tft.setCursor(cx - 48, cy + r/2 + 8);
+        tft.print("SCANNING...");
     }
 
-    // Correlation alert overlay on radar
+    // ── Legend (bottom-left) ─────────────────────────────────
+    tft.setTextSize(1);
+    tft.setTextColor(COL_DIMTEXT);
+    tft.setCursor(5, 195);
+    tft.setTextColor(0xF81F); tft.print("o");
+    tft.setTextColor(COL_DIMTEXT); tft.print("BLE  ");
+    tft.setTextColor(TFT_WHITE); tft.print("o");
+    tft.setTextColor(COL_DIMTEXT); tft.print("WiFi");
+
+    // ── Correlation alert bar ────────────────────────────────
     if (!activeAlerts.empty()) {
+        tft.fillRect(0, 195, 320, 13, COL_ALERT_BG);
         tft.setTextSize(1);
         tft.setTextColor(COL_TIER5);
-        tft.setCursor(5, 200);
-        tft.printf("ALERT: %s", activeAlerts[0].name.c_str());
+        tft.setCursor(4, 197);
+        tft.printf("! %s", activeAlerts[0].name.c_str());
     }
 
     drawNavbar();
