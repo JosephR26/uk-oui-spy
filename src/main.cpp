@@ -330,6 +330,9 @@ int scanInterval = 5000;
 bool scanning = false;
 char sessionId[10] = "----";      // generated at boot from esp_random()
 char sessionLogPath[32] = "/detections.csv";  // set to /sessions/XXXX-XXXX.csv after SD init
+char wifiSsid[64] = "";           // loaded from /wifi.txt on SD card
+char wifiPass[64] = "";
+bool staCredentialsFound = false;
 
 // ============================================================
 // SD OUI LOOKUP  (binary search on /oui.bin — 35 bytes/record)
@@ -988,6 +991,22 @@ void setup() {
         SD.mkdir("/sessions");
         snprintf(sessionLogPath, sizeof(sessionLogPath), "/sessions/%s.csv", sessionId);
         Serial.printf("[BOOT] Log path: %s\n", sessionLogPath);
+        // Read WiFi credentials from /wifi.txt (SSID line 1, password line 2)
+        if (SD.exists("/wifi.txt")) {
+            File wf = SD.open("/wifi.txt", FILE_READ);
+            if (wf) {
+                String ssid = wf.readStringUntil('\n');
+                String pass = wf.readStringUntil('\n');
+                wf.close();
+                ssid.trim(); pass.trim();
+                if (ssid.length() > 0) {
+                    strncpy(wifiSsid, ssid.c_str(), 63); wifiSsid[63] = 0;
+                    strncpy(wifiPass, pass.c_str(), 63); wifiPass[63] = 0;
+                    staCredentialsFound = true;
+                    Serial.printf("[BOOT] WiFi creds: SSID=%s\n", wifiSsid);
+                }
+            }
+        }
     }
     Serial.println("[BOOT] initSDCard OK");
     bootTag("Initialising SD card",
@@ -1019,19 +1038,36 @@ void setup() {
     bootTag("Session ID", sessionId, 0x001F, TFT_WHITE);
     Serial.printf("[BOOT] Session: %s\n", sessionId);
 
-    // NTP time sync — brief attempt; device is AP-only so typically offline
-    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-    unsigned long ntpStart = millis();
+    // NTP time sync — via STA if wifi.txt credentials found, otherwise AP MODE
     bool ntpOk = false;
-    while (millis() - ntpStart < 2000) {
-        if (time(nullptr) > 1000000000UL) { ntpOk = true; break; }
-        delay(100);
+    if (staCredentialsFound) {
+        // Wait up to 8s for STA association
+        bootTag("Connecting WiFi", wifiSsid, 0x7BEF);
+        unsigned long staStart = millis();
+        bool staOk = false;
+        while (millis() - staStart < 8000) {
+            if (WiFi.status() == WL_CONNECTED) { staOk = true; break; }
+            delay(200);
+        }
+        if (staOk) {
+            Serial.printf("[WiFi] STA connected, IP: %s\n", WiFi.localIP().toString().c_str());
+            configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+            unsigned long ntpStart = millis();
+            while (millis() - ntpStart < 5000) {
+                if (time(nullptr) > 1000000000UL) { ntpOk = true; break; }
+                delay(100);
+            }
+            bootTag("Syncing time", ntpOk ? "SYNCED" : "TIMEOUT",
+                                    ntpOk ? 0x07E0   : 0xFD20);
+            Serial.printf("[BOOT] NTP sync %s\n", ntpOk ? "OK" : "timed out");
+        } else {
+            Serial.println("[WiFi] STA connection timed out");
+            bootTag("Syncing time", "TIMEOUT", 0xFD20);
+        }
+    } else {
+        bootTag("Syncing time", "AP MODE", 0x4A49);               // grey — no credentials, expected
+        Serial.println("[BOOT] NTP sync -- no wifi.txt, AP-only mode");
     }
-    bootTag("Syncing time",
-            ntpOk ? "SYNCED"  : "OFFLINE",
-            ntpOk ? 0x07E0    : 0xFD20);                          // green / orange
-    if (ntpOk) { Serial.println("[BOOT] NTP sync OK"); }
-    else        { Serial.println("[BOOT] NTP sync -- (offline/AP-only)"); }
 
     delay(1000);  // let the user read the boot screen before main takes over
     // ── End boot splash ───────────────────────────────────────────────────────
@@ -1068,14 +1104,23 @@ void initWiFi() {
     if (config.enableWebPortal) {
         WiFi.mode(WIFI_AP_STA);
         WiFi.softAP(AP_SSID, AP_PASS, AP_CHANNEL, 0, AP_MAX_CONN);
-        WiFi.disconnect();  // Disconnect STA side (not connected to any AP)
+        if (staCredentialsFound) {
+            WiFi.begin(wifiSsid, wifiPass);  // STA connection for NTP/updates
+            Serial.printf("[WiFi] STA connecting to: %s\n", wifiSsid);
+        } else {
+            WiFi.disconnect();
+        }
         dnsServer.start(53, "*", WiFi.softAPIP());
         setupWebServer();
         webPortalActive = true;
         Serial.printf("[WEB] AP: %s  IP: %s\n", AP_SSID, WiFi.softAPIP().toString().c_str());
     } else {
         WiFi.mode(WIFI_STA);
-        WiFi.disconnect();
+        if (staCredentialsFound) {
+            WiFi.begin(wifiSsid, wifiPass);
+        } else {
+            WiFi.disconnect();
+        }
     }
 }
 
