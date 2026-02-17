@@ -286,7 +286,7 @@ struct Config {
     bool autoBrightness = true;
     char encryptionKey[17] = "UK-OUI-SPY-2026";
     bool setupComplete = false;
-    int sleepTimeout = 300;
+    int sleepTimeout = 1800;  // seconds — default 30 min, persisted in NVS
     // Touch calibration — Fr4nkFletcher CYD_28 validated defaults
     int calXMin = TOUCH_CAL_X_MIN_DEFAULT;
     int calXMax = TOUCH_CAL_X_MAX_DEFAULT;
@@ -1892,6 +1892,7 @@ void saveConfig() {
     preferences.putBool("auto", config.autoBrightness);
     preferences.putBool("baseline", config.showBaseline);
     preferences.putBool("webp", config.enableWebPortal);
+    preferences.putInt("sleepT", config.sleepTimeout);
     // Touch calibration
     preferences.putInt("calXMin", config.calXMin);
     preferences.putInt("calXMax", config.calXMax);
@@ -1910,6 +1911,7 @@ void loadConfig() {
     config.autoBrightness = preferences.getBool("auto", true);
     config.showBaseline = preferences.getBool("baseline", true);
     config.enableWebPortal = preferences.getBool("webp", true);
+    config.sleepTimeout    = preferences.getInt("sleepT", 1800);  // 30 min default
     // Touch calibration — default to device-measured 4-corner values
     config.calXMin = preferences.getInt("calXMin", TOUCH_CAL_X_MIN_DEFAULT);
     config.calXMax = preferences.getInt("calXMax", TOUCH_CAL_X_MAX_DEFAULT);
