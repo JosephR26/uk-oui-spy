@@ -162,6 +162,7 @@ struct CorrelationAlert {
 struct Detection {
     String macAddress;
     String manufacturer;
+    String ssid;           // WiFi SSID or BLE advertised name (empty if not broadcast)
     String context;
     String correlationGroup;
     DeviceCategory category;
@@ -246,7 +247,7 @@ void initWiFi();
 void initSDCard();
 void scanBLE();
 void scanWiFi();
-void checkOUI(String macAddress, int8_t rssi, bool isBLE);
+void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name = "");
 void addDetection(Detection det);
 void updateDisplay();
 void drawWizardScreen();
@@ -531,7 +532,8 @@ int getTierStars(int priority) {
 
 class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
     void onResult(NimBLEAdvertisedDevice* advertisedDevice) {
-        checkOUI(advertisedDevice->getAddress().toString().c_str(), advertisedDevice->getRSSI(), true);
+        String bleName = advertisedDevice->getName().c_str();
+        checkOUI(advertisedDevice->getAddress().toString().c_str(), advertisedDevice->getRSSI(), true, bleName);
     }
 };
 
@@ -800,14 +802,14 @@ void scanWiFi() {
     lastWiFiCount = max(n, 0);
     totalScanned += max(n, 0);
     Serial.printf("[SCAN] WiFi: %d networks found\n", n);
-    for (int i = 0; i < n; ++i) checkOUI(WiFi.BSSIDstr(i), WiFi.RSSI(i), false);
+    for (int i = 0; i < n; ++i) checkOUI(WiFi.BSSIDstr(i), WiFi.RSSI(i), false, WiFi.SSID(i));
 }
 
 // ============================================================
 // OUI CHECK WITH PRIORITY ENRICHMENT
 // ============================================================
 
-void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
+void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name) {
     String mac = macAddress;
     mac.toUpperCase();
     String oui = mac.substring(0, 8);
@@ -815,6 +817,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
     // Build detection
     Detection det;
     det.macAddress = mac;
+    det.ssid = name;
     det.rssi = rssi;
     det.timestamp = millis();
     det.firstSeen = millis();
@@ -833,7 +836,13 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE) {
         det.relevance = entry->relevance;
         det.priority = (det.relevance == REL_HIGH) ? 4 : (det.relevance == REL_MEDIUM) ? 3 : 2;
     } else {
-        det.manufacturer = oui;
+        // Check locally-administered bit (bit 1 of first byte) = randomised/private MAC
+        int firstByte = strtol(oui.substring(0, 2).c_str(), nullptr, 16);
+        if (firstByte & 0x02) {
+            det.manufacturer = "Randomised MAC";
+        } else {
+            det.manufacturer = oui;   // real OUI, not a surveillance device
+        }
         det.category = CAT_UNKNOWN;
         det.relevance = REL_LOW;
         det.priority = PRIORITY_BASELINE;
@@ -875,6 +884,7 @@ void addDetection(Detection det) {
             d.rssi = det.rssi;
             d.timestamp = millis();
             d.sightings++;
+            if (d.ssid.isEmpty() && !det.ssid.isEmpty()) d.ssid = det.ssid;
             found = true;
             break;
         }
@@ -883,9 +893,10 @@ void addDetection(Detection det) {
         detections.insert(detections.begin(), det);
         if ((int)detections.size() > MAX_DETECTIONS) detections.pop_back();
     }
-    // Sort by priority (highest first), then by RSSI (strongest first)
+    // Sort: most recently seen first (timestamp desc); break ties by priority then RSSI
     std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b) {
-        if (a.priority != b.priority) return a.priority > b.priority;
+        if (a.timestamp != b.timestamp) return a.timestamp > b.timestamp;
+        if (a.priority  != b.priority)  return a.priority  > b.priority;
         return a.rssi > b.rssi;
     });
     xSemaphoreGive(xDetectionMutex);
@@ -1189,13 +1200,17 @@ void drawMainScreen() {
         if (displayName.length() > 28) displayName = displayName.substring(0, 25) + "...";
         tft.print(displayName);
 
-        // Second line: MAC + RSSI + sightings
+        // Second line: SSID/BLE name (if known) or MAC prefix + RSSI + sightings
         tft.setTextColor(COL_DIMTEXT);
         tft.setCursor(14, y + 17);
-        tft.printf("%s  %ddBm", det.macAddress.substring(0, 8).c_str(), det.rssi);
-        if (det.sightings > 1) {
-            tft.printf("  x%d", det.sightings);
+        if (!det.ssid.isEmpty()) {
+            String s = det.ssid;
+            if (s.length() > 20) s = s.substring(0, 18) + "..";
+            tft.printf("%-20s %ddBm", s.c_str(), det.rssi);
+        } else {
+            tft.printf("%s  %ddBm", det.macAddress.substring(0, 8).c_str(), det.rssi);
         }
+        if (det.sightings > 1) tft.printf("  x%d", det.sightings);
 
         y += 33;
         itemIndex++;
