@@ -1602,6 +1602,29 @@ void drawMainScreen() {
         tft.setCursor(269, y + 4);
         tft.print(det.isBLE ? " BLE" : "WiFi");
 
+        // Category badge (stacked below protocol badge — colour-coded by type)
+        if (det.category != CAT_UNKNOWN) {
+            uint16_t catBg; const char* catLabel; bool lightBg = false;
+            switch (det.category) {
+                case CAT_CCTV:                catBg = 0xC000; catLabel = "CCTV";  break;
+                case CAT_ANPR:                catBg = 0xC8A0; catLabel = "ANPR";  break;
+                case CAT_DRONE:               catBg = 0x4810; catLabel = "DRONE"; break;
+                case CAT_BODYCAM:             catBg = 0xA800; catLabel = "BCAM";  break;
+                case CAT_CLOUD_CCTV:          catBg = 0x8000; catLabel = "CLOUD"; break;
+                case CAT_TRAFFIC:             catBg = 0x8400; catLabel = "TRAFF"; break;
+                case CAT_FACIAL_RECOG:        catBg = 0x8010; catLabel = "FACE";  break;
+                case CAT_SMART_CITY_INFRA:    catBg = 0x0412; catLabel = "CITY";  break;
+                case CAT_PARKING_ENFORCEMENT: catBg = 0xA840; catLabel = "PARK";  break;
+                case CAT_DASH_CAM:            catBg = 0x4208; catLabel = "DASH";  break;
+                case CAT_DOORBELL_CAM:        catBg = 0x03E0; catLabel = "BELL";  break;
+                default:                      catBg = 0x2945; catLabel = "UNK";   break;
+            }
+            tft.fillRoundRect(265, y + 16, 42, 12, 2, catBg);
+            tft.setTextColor(TFT_WHITE);
+            tft.setCursor(269, y + 18);
+            tft.print(catLabel);
+        }
+
         // Line 1 — Primary identifier (tier-coloured so risk is immediately visible)
         // For BLE: prefer company name over raw OUI; for WiFi: SSID if manufacturer unknown
         bool rawOUI = (det.manufacturer.length() == 8 && det.manufacturer[2] == ':');
