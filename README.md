@@ -6,8 +6,10 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LEGAL.md)
 [![Platform: ESP32](https://img.shields.io/badge/Platform-ESP32-red.svg)](https://www.espressif.com/en/products/socs/esp32)
-[![Version: 3.1.0](https://img.shields.io/badge/Version-3.1.0-green.svg)](CHANGELOG.md)
-[![OUI Database: 230](https://img.shields.io/badge/OUI_Database-230-orange.svg)](docs/OUI_DATABASE_EXPANSION.md)
+[![Version: 3.3.0-PRO](https://img.shields.io/badge/Version-3.3.0--PRO-green.svg)](CHANGELOG.md)
+[![OUI Database: 363](https://img.shields.io/badge/OUI_Database-363-orange.svg)](docs/OUI_DATABASE_EXPANSION.md)
+[![IEEE OUI: 38,899](https://img.shields.io/badge/IEEE_OUI-38%2C899-blue.svg)](docs/OUI_DATABASE_EXPANSION.md)
+[![BT SIG: 3,972](https://img.shields.io/badge/BT_SIG-3%2C972-purple.svg)](docs/OUI_DATABASE_EXPANSION.md)
 
 <br>
 
@@ -17,7 +19,7 @@
 
 **A portable, open-source surveillance detector that identifies CCTV cameras, ANPR systems, police drones, body cameras, and facial recognition infrastructure by their wireless signatures.**
 
-Built on a ~£15 ESP32 board. Fits in your pocket. Runs for 24+ hours on a coin-cell LiPo.
+Built by **Midas Electrotech** on a ~£15 ESP32 board. Fits in your pocket. Runs for 24+ hours on a coin-cell LiPo.
 
 [Quick Start](QUICKSTART.md) · [User Manual](USER_MANUAL.md) · [Hardware Guide](docs/HARDWARE_SETUP.md) · [FAQ](FAQ.md)
 
@@ -29,7 +31,7 @@ Built on a ~£15 ESP32 board. Fits in your pocket. Runs for 24+ hours on a coin-
 
 The UK has one of the highest densities of surveillance cameras in the world. Most people walk past hundreds of cameras daily without knowing what's collecting their data, who operates it, or whether facial recognition is active.
 
-UK-OUI-SPY PRO makes the invisible visible. Every Wi-Fi and Bluetooth device broadcasts a manufacturer ID (OUI) in its MAC address. This device listens for those broadcasts and cross-references them against a curated database of 230 UK surveillance equipment manufacturers -- from Hikvision council CCTV to Axon police body cameras to NEC facial recognition systems.
+UK-OUI-SPY PRO makes the invisible visible. Every Wi-Fi and Bluetooth device broadcasts a manufacturer ID (OUI) in its MAC address. This device listens for those broadcasts and cross-references them against a curated database of **363 UK surveillance equipment manufacturers** compiled in-flash -- from Hikvision council CCTV to Axon police body cameras to NEC facial recognition systems -- backed by a full 38,899-entry IEEE OUI database and 3,972-entry Bluetooth SIG company database on SD card.
 
 No hacking. No interception. Just passive listening to publicly broadcast signals.
 
@@ -103,7 +105,17 @@ Or open the project folder in VS Code and click the PlatformIO Upload button.
 
 ### 2. Prepare SD Card
 
-Format a microSD card as FAT32. Copy `examples/priority.json` to the root for enhanced priority/correlation features. Insert into the board.
+Format a microSD card as FAT32. Three database files are required for full functionality:
+
+| File | Size | Purpose | How to generate |
+|------|------|---------|-----------------|
+| `oui.bin` | ~1.3 MB | IEEE OUI lookup (38,899 entries) | `python tools/build_oui_db.py` |
+| `btcompany.bin` | ~124 KB | Bluetooth SIG company IDs (3,972 entries) | `python tools/build_bt_db.py` |
+| `priority.json` | ~35 KB | Priority scoring + correlation rules (183 entries) | `python tools/build_priority_db.py` |
+
+Copy all three files to the **root** of the SD card. The device hot-detects SD insertion — if a card is inserted after boot, it will remount automatically within ~60 seconds.
+
+Detection logs are saved per-session to `/sessions/<SESSION-ID>.csv` automatically.
 
 ### 3. Boot & Scan
 
@@ -144,8 +156,10 @@ The device automatically identifies coordinated surveillance operations:
 | `SKYDIO OPS ACTIVE` | Skydio controller + drone both detected | CRITICAL |
 | `FACE RECOG ZONE` | Facial recognition infrastructure detected | CRITICAL |
 | `DJI DRONE OPS` | DJI drone platform in range | HIGH |
-| `SURVEILLANCE CLUSTER` | 3+ government CCTV devices | HIGH |
-| `SMART CITY ZONE` | 2+ smart city infrastructure devices | HIGH |
+| `SURVEILLANCE CLUSTER` | 3+ multi-vendor CCTV devices in range | HIGH |
+| `THERMAL SURVEILLANCE` | FLIR/thermal camera infrastructure | HIGH |
+| `POLICE PRESENCE` | Axon/Sepura/TETRA radio detected | HIGH |
+| `DRONE OPS ZONE` | DJI + additional drone infrastructure | HIGH |
 
 ---
 
@@ -153,15 +167,14 @@ The device automatically identifies coordinated surveillance operations:
 
 Two offline tools for analysing SD card logs after a session:
 
-**Python Script** -- Terminal-based statistical breakdown
+**Database Build Scripts** -- Fetch the latest OUI/BT data and rebuild SD card databases:
 ```bash
-python analysis/analyze_detections.py detections.csv
+python tools/build_oui_db.py        # IEEE OUI database  → oui.bin
+python tools/build_bt_db.py         # BT SIG companies   → btcompany.bin
+python tools/build_priority_db.py   # Priority + rules   → priority.json
 ```
 
-**Web Viewer** -- Interactive browser dashboard with charts, filtering, and colour-coded cards. 100% local, no data uploaded.
-```
-Open visualization/detections_viewer.html in any browser
-```
+**Session logs** are saved per-boot to `/sessions/<SESSION-ID>.csv` on the SD card. Pull the card after a walk and open the CSV directly, or run any standard data analysis tool against it.
 
 <!-- Add analysis tool screenshot here -->
 
@@ -204,6 +217,6 @@ See [LEGAL.md](LEGAL.md) for the full disclaimer, privacy notice, and MIT licenc
 
 <div align="center">
 
-**MIT Licence** · Built in Wales · [Report an Issue](https://github.com/JosephR26/uk-oui-spy/issues)
+**MIT Licence** · [Midas Electrotech](https://github.com/JosephR26) · Built in Wales · [Report an Issue](https://github.com/JosephR26/uk-oui-spy/issues)
 
 </div>
