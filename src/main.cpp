@@ -27,6 +27,7 @@
 #include <ESPAsyncWebServer.h>
 #include <DNSServer.h>
 #include "esp_sleep.h"
+#include <time.h>
 #include "oui_database.h"
 #include "wifi_promiscuous.h"
 #include "web_portal.h"
@@ -317,6 +318,7 @@ unsigned long lastScanTime = 0;
 unsigned long lastInteractionTime = 0;
 int scanInterval = 5000;
 bool scanning = false;
+char sessionId[10] = "----";   // generated at boot from esp_random()
 
 // ============================================================
 // SD OUI LOOKUP  (binary search on /oui.bin — 35 bytes/record)
@@ -906,36 +908,61 @@ void setup() {
 
     // ── Boot splash ──────────────────────────────────────────────────────────
     tft.fillScreen(0x0000);
-    // Title block
-    tft.fillRect(0, 60, 320, 50, 0x1082);
+
+    // Header bar — project name + version
+    tft.fillRect(0, 0, 320, 28, COL_HEADER);
     tft.setTextSize(2);
-    tft.setTextColor(0x07FF);  // cyan
-    tft.setCursor(20, 70);
+    tft.setTextColor(0x07FF);       // cyan
+    tft.setCursor(8, 6);
     tft.print("UK-OUI-SPY PRO");
     tft.setTextSize(1);
     tft.setTextColor(TFT_WHITE);
-    tft.setCursor(20, 96);
-    tft.print("v" VERSION "  |  JosephR26");
+    tft.setCursor(248, 10);
+    tft.print("v" VERSION);
+
     // Tagline
     tft.setTextColor(0x7BEF);
-    tft.setCursor(20, 120);
-    tft.print("Passive WiFi & BLE Surveillance Detector");
-    // Status line helper — updates a single line at y=160
-    auto bootStatus = [&](const char* msg) {
-        tft.fillRect(0, 155, 320, 14, 0x0000);
+    tft.setCursor(8, 34);
+    tft.print("Midas Electrotech  |  Surveillance Detector");
+
+    // Divider
+    tft.drawFastHLine(0, 46, 320, 0x2104);
+
+    // Stacked status lines: each init step appends a line with [ OK ] or [ -- ]
+    int bootY = 52;
+    auto bootLine = [&](const char* label, bool ok) {
         tft.setTextSize(1);
-        tft.setTextColor(0x07E0);  // green
-        tft.setCursor(10, 158);
-        tft.print(msg);
+        tft.setTextColor(0xC618);                   // light grey label
+        tft.setCursor(8, bootY);
+        char buf[42];
+        snprintf(buf, sizeof(buf), "%-32s", label); // pad to fixed width
+        tft.print(buf);
+        tft.setTextColor(ok ? 0x07E0 : 0x4A49);     // green=OK, grey=--
+        tft.print(ok ? "[ OK ]" : "[ -- ]");
+        bootY += 14;
+    };
+    auto bootInfo = [&](const char* label, const char* value) {
+        tft.setTextSize(1);
+        tft.setTextColor(0xC618);
+        tft.setCursor(8, bootY);
+        char buf[42];
+        snprintf(buf, sizeof(buf), "%-22s", label);
+        tft.print(buf);
+        tft.setTextColor(0x07FF);   // cyan for info values
+        tft.print(value);
+        bootY += 14;
     };
 
+    // Generate session ID from hardware RNG
+    uint32_t sid = esp_random();
+    snprintf(sessionId, sizeof(sessionId), "%04X-%04X",
+             (unsigned)(sid >> 16) & 0xFFFFu, (unsigned)sid & 0xFFFFu);
+
     Serial.println("[BOOT] initTouch...");
-    bootStatus("Initialising touch...");
     initTouch();
     Serial.println("[BOOT] initTouch OK");
 
     Serial.println("[BOOT] loadConfig...");
-    bootStatus("Loading config...");
     loadConfig();
     Serial.println("[BOOT] loadConfig OK");
     Serial.printf("[BOOT] Touch cal: X=%d..%d  Y=%d..%d\n",
@@ -946,33 +973,46 @@ void setup() {
     currentScreen = SCREEN_MAIN;
     Serial.println("[BOOT] Wizard skipped -> SCREEN_MAIN");
 
+    bootLine("Surveillance detector", true);
+
     Serial.println("[BOOT] initSDCard...");
-    bootStatus("Mounting SD card...");
     initSDCard();
     Serial.println("[BOOT] initSDCard OK");
-    bootStatus(sdCardAvailable ? "SD card OK" : "SD card not found");
-    delay(300);
+    bootLine("Initialising SD card", sdCardAvailable);
 
     Serial.printf("[BOOT] OUI database: %d entries\n", OUI_DATABASE_SIZE);
 
     // Load priority database (SD first, then static fallback)
     Serial.println("[BOOT] Loading priority DB...");
-    bootStatus("Loading priority database...");
     if (!loadPriorityDB("/priority.json")) initializeStaticPriorityDB();
     Serial.println("[BOOT] Priority DB OK");
 
     Serial.println("[BOOT] initBLE...");
-    bootStatus("Starting BLE...");
     initBLE();
     Serial.println("[BOOT] initBLE OK");
+    bootLine("BLE scanner", config.enableBLE);
 
     Serial.println("[BOOT] initWiFi...");
-    bootStatus("Starting WiFi...");
     initWiFi();
     Serial.println("[BOOT] initWiFi OK");
+    bootLine("WiFi scanner", config.enableWiFi);
 
-    bootStatus("Ready — starting scan...");
-    delay(500);
+    bootInfo("Session ID", sessionId);
+    Serial.printf("[BOOT] Session: %s\n", sessionId);
+
+    // NTP time sync — brief attempt; device is AP-only so typically offline
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    unsigned long ntpStart = millis();
+    bool ntpOk = false;
+    while (millis() - ntpStart < 2000) {
+        if (time(nullptr) > 1000000000UL) { ntpOk = true; break; }
+        delay(100);
+    }
+    bootLine("Syncing time", ntpOk);
+    if (ntpOk) { Serial.println("[BOOT] NTP sync OK"); }
+    else        { Serial.println("[BOOT] NTP sync -- (offline/AP-only)"); }
+
+    delay(800);   // let the user read the boot screen before main takes over
     // ── End boot splash ───────────────────────────────────────────────────────
 
     lastInteractionTime = millis();
