@@ -734,7 +734,21 @@ void onPromiscuousPacket(const uint8_t* mac, int8_t rssi, uint8_t channel) {
 // ============================================================
 
 void ScanTask(void *pvParameters) {
+    static int sdCheckCounter = 0;
     for (;;) {
+        // Periodic SD health check: attempt remount if card was reinserted
+        if (++sdCheckCounter >= 10) {
+            sdCheckCounter = 0;
+            if (!sdCardAvailable) {
+                if (SD.begin(SD_CS, sdSPI)) {
+                    sdCardAvailable = true;
+                    ouiCache.clear();  // force re-lookup with newly mounted card
+                    btCache.clear();
+                    Serial.println("[SD] Card remounted — caches cleared");
+                }
+            }
+        }
+
         if (config.setupComplete && millis() - lastScanTime >= (unsigned long)scanInterval) {
             scanning = true;
             if (config.enableBLE) {
@@ -1346,7 +1360,7 @@ void drawMainScreen() {
     drawHeader("SURVEILLANCE LIST");
 
     // ── Stats strip (y=28..46) ──────────────────────────────────────────────
-    tft.fillRect(0, 28, 320, 18, 0x0841);  // dark strip
+    tft.fillRect(0, 28, 320, 18, COL_HEADER);  // same shade as title bar — clearly visible
     xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
     int bleTotal = 0, wifiTotal = 0, alertCount = 0;
     for (auto& d : detections) {
