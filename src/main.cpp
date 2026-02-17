@@ -257,6 +257,12 @@ String getBLESvcHint(uint16_t uuid) {
         case 0xFD6F: return "Apple Proximity";
         case 0xFE9F: return "Google Nearby";
         case 0xFEAA: return "Eddystone Beacon";
+        case 0xFE56: return "Camera (GoPro)";
+        case 0xFEBB: return "Body Camera";      // Motorola Solutions PMLN profile
+        case 0x1804: return "TX Power";
+        case 0x1805: return "Current Time";     // common in body cams / comms devices
+        case 0x180A: return "Device Info";
+        case 0xFE03: return "ANT+ Sensor";
         default:     return "";
     }
 }
@@ -294,6 +300,7 @@ struct Config {
     int brightness = 255;
     bool autoBrightness = true;
     char encryptionKey[17] = "UK-OUI-SPY-2026";
+    char apPassword[20]    = "spypro2026";       // web portal hotspot password (8-19 chars)
     bool setupComplete = false;
     int sleepTimeout = 1800;  // seconds — default 30 min, persisted in NVS
     // Touch calibration — Fr4nkFletcher CYD_28 validated defaults
@@ -396,6 +403,7 @@ volatile int lastBLECount = 0;
 volatile int lastWiFiCount = 0;
 volatile int totalScanned = 0;
 volatile int totalMatched = 0;
+volatile int totalEvicted = 0;  // devices silently dropped when detection buffer was full
 
 // ============================================================
 // FUNCTION PROTOTYPES
@@ -451,7 +459,7 @@ bool loadPriorityDB(const char* path) {
     file.close();
 
     if (error) {
-        Serial.printf("Priority JSON parse error: %s\n", error.c_str());
+        Serial.printf("[WARN] Priority JSON parse error: %s — static fallback\n", error.c_str());
         return false;
     }
 
@@ -494,6 +502,10 @@ bool loadPriorityDB(const char* path) {
         correlationRules.push_back(cr);
     }
 
+    if (priorityDB.empty()) {
+        Serial.println("[WARN] Priority JSON has no entries — static fallback");
+        return false;
+    }
     Serial.printf("Priority DB: %d entries, %d rules loaded\n", priorityDB.size(), correlationRules.size());
     return true;
 }
@@ -1100,7 +1112,7 @@ void initBLE() { NimBLEDevice::init("UK-OUI-SPY"); }
 void initWiFi() {
     if (config.enableWebPortal) {
         WiFi.mode(WIFI_AP_STA);
-        WiFi.softAP(AP_SSID, AP_PASS, AP_CHANNEL, 0, AP_MAX_CONN);
+        WiFi.softAP(AP_SSID, config.apPassword, AP_CHANNEL, 0, AP_MAX_CONN);
         if (staCredentialsFound) {
             WiFi.begin(wifiSsid, wifiPass);  // STA connection for NTP/updates
             Serial.printf("[WiFi] STA connecting to: %s\n", wifiSsid);
@@ -1213,6 +1225,33 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
         det.priority = priIt->second->priority;
     }
 
+    // BLE company-based surveillance boost — catches randomised-MAC devices
+    // Manufacturer-specific data company ID is NOT randomised, so DJI/Axon/FLIR
+    // can be identified by BT company ID even when MAC is random.
+    if (isBLE && det.category == CAT_UNKNOWN && !det.bleCompany.isEmpty()) {
+        struct BLEBoost { const char* keyword; DeviceCategory cat; int priority; };
+        static const BLEBoost boosts[] = {
+            {"DJI",                  CAT_DRONE,   PRIORITY_HIGH},
+            {"Axon",                 CAT_BODYCAM, PRIORITY_HIGH},
+            {"FLIR",                 CAT_CCTV,    PRIORITY_HIGH},
+            {"Motorola Solutions",   CAT_BODYCAM, PRIORITY_MODERATE},
+            {"Hikvision",            CAT_CCTV,    PRIORITY_HIGH},
+            {"Dahua",                CAT_CCTV,    PRIORITY_HIGH},
+            {"Axis Comm",            CAT_CCTV,    PRIORITY_HIGH},
+            {"Avigilon",             CAT_CCTV,    PRIORITY_HIGH},
+            {"Genetec",              CAT_CCTV,    PRIORITY_MODERATE},
+        };
+        for (const auto& b : boosts) {
+            if (det.bleCompany.indexOf(b.keyword) >= 0) {
+                det.category = b.cat;
+                det.priority  = b.priority;
+                Serial.printf("[BLE-BOOST] %s -> %s (company: %s)\n",
+                              mac.c_str(), b.keyword, det.bleCompany.c_str());
+                break;
+            }
+        }
+    }
+
     addDetection(det);
 
     // Alert based on priority
@@ -1247,7 +1286,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
                 String(det.priority) + "," +
                 String(rssi)         + "," +
                 String(det.sightings);
-            f.println(logData); f.close();
+            f.println(logData); f.flush(); f.close();
         }
     }
 }
@@ -1267,7 +1306,7 @@ void addDetection(Detection det) {
     }
     if (!found) {
         detections.insert(detections.begin(), det);
-        if ((int)detections.size() > MAX_DETECTIONS) detections.pop_back();
+        if ((int)detections.size() > MAX_DETECTIONS) { detections.pop_back(); totalEvicted++; }
     }
     // Sort: most recently seen first (timestamp desc); break ties by priority then RSSI
     std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b) {
@@ -1295,27 +1334,39 @@ void setupWebServer() {
 
     // API: Get detections
     webServer.on("/api/detections", HTTP_GET, [](AsyncWebServerRequest *req){
-        DynamicJsonDocument doc(8192);
+        DynamicJsonDocument doc(20480);  // 50 detections * ~400 bytes each
         xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
         auto snap = detections;
         xSemaphoreGive(xDetectionMutex);
-        doc["total"] = snap.size();
+        doc["total"]    = snap.size();
+        doc["capacity"] = MAX_DETECTIONS;
+        doc["evicted"]  = totalEvicted;
         int highCount = 0;
         JsonArray arr = doc.createNestedArray("detections");
         for (auto &d : snap) {
             if (d.priority >= PRIORITY_HIGH) highCount++;
             JsonObject obj = arr.createNestedObject();
-            obj["mac"] = d.macAddress;
-            obj["manufacturer"] = d.manufacturer;
-            obj["category"] = getCategoryName(d.category);
-            obj["relevance"] = getRelevanceName(d.relevance);
-            obj["context"] = d.context;
-            obj["rssi"] = d.rssi;
-            obj["isBLE"] = d.isBLE;
-            obj["priority"] = d.priority;
-            obj["threat"] = d.priority * 20;
-            obj["sightings"] = d.sightings;
-            obj["stationary"] = (d.sightings > 3);
+            obj["mac"]           = d.macAddress;
+            obj["manufacturer"]  = d.manufacturer;
+            obj["ssid"]          = d.ssid;
+            obj["bleCompany"]    = d.bleCompany;
+            obj["bleSvcHint"]    = d.bleSvcHint;
+            obj["correlationGroup"] = d.correlationGroup;
+            obj["context"]       = d.context;
+            obj["category"]      = getCategoryName(d.category);
+            obj["relevance"]     = getRelevanceName(d.relevance);
+            obj["priority"]      = d.priority;
+            obj["threat"]        = d.priority * 20;
+            obj["rssi"]          = d.rssi;
+            obj["txPower"]       = d.hasTxPower ? d.txPower : 0;
+            obj["hasTxPower"]    = d.hasTxPower;
+            obj["isBLE"]         = d.isBLE;
+            obj["publicAddr"]    = d.blePublicAddr;
+            obj["sightings"]     = d.sightings;
+            obj["stationary"]    = (d.sightings > 3);
+            obj["firstSeen"]     = d.firstSeen;
+            obj["lastSeen"]      = d.timestamp;
+            obj["ageSec"]        = (millis() - d.timestamp) / 1000;
         }
         doc["highCount"] = highCount;
         String response;
@@ -1361,6 +1412,7 @@ void setupWebServer() {
         doc["showBaseline"] = config.showBaseline;
         doc["webPortal"] = config.enableWebPortal;
         doc["brightness"] = config.brightness;
+        doc["apPassword"] = config.apPassword;
         String response;
         serializeJson(doc, response);
         req->send(200, "application/json", response);
@@ -1371,7 +1423,10 @@ void setupWebServer() {
         NULL,
         [](AsyncWebServerRequest *req, uint8_t *data, size_t len, size_t index, size_t total){
             DynamicJsonDocument doc(512);
-            deserializeJson(doc, data, len);
+            if (deserializeJson(doc, data, len)) {
+                req->send(400, "application/json", "{\"error\":\"bad JSON\"}");
+                return;
+            }
             if (doc.containsKey("ble")) config.enableBLE = doc["ble"];
             if (doc.containsKey("wifi")) config.enableWiFi = doc["wifi"];
             if (doc.containsKey("logging")) config.enableLogging = doc["logging"];
@@ -1380,6 +1435,15 @@ void setupWebServer() {
             if (doc.containsKey("brightness")) {
                 config.brightness = doc["brightness"];
                 setBrightness(config.brightness);
+            }
+            if (doc.containsKey("apPassword")) {
+                String newPass = doc["apPassword"].as<String>();
+                if (newPass.length() >= 8 && newPass.length() <= 19) {
+                    strncpy(config.apPassword, newPass.c_str(), 19);
+                    config.apPassword[19] = 0;
+                    // Restart AP with new password
+                    WiFi.softAP(AP_SSID, config.apPassword, AP_CHANNEL, 0, AP_MAX_CONN);
+                }
             }
             saveConfig();
             displayDirty = true;
@@ -1877,13 +1941,15 @@ void drawInfoScreen() {
     drawRow("Priority DB:", String(priorityDB.size()) + " entries");
     drawRow("Corr. Rules:", String(correlationRules.size()) + " rules");
     drawRow("Active Alerts:", String(activeAlerts.size()));
-    drawRow("Detections:", String(detections.size()));
+    drawRow("Detections:", String(detections.size()) + "/" + String(MAX_DETECTIONS) +
+                          (totalEvicted ? " (" + String(totalEvicted) + " dropped)" : ""));
     drawRow("Free Memory:", String(ESP.getFreeHeap() / 1024) + " KB");
     drawRow("Scanned:", String(totalScanned) + " total, " + String(totalMatched) + " matched");
     drawRow("Touch:", touchAvailable ? "OK" : "ERROR");
     drawRow("SD Card:", sdCardAvailable ? "OK" : "NOT FOUND");
     if (webPortalActive) {
         drawRow("Web Portal:", String(AP_SSID) + " (" + String(WiFi.softAPgetStationNum()) + ")");
+        drawRow("AP Password:", config.apPassword);
     } else {
         drawRow("Web Portal:", "Disabled");
     }
@@ -2033,6 +2099,7 @@ void saveConfig() {
     preferences.putBool("baseline", config.showBaseline);
     preferences.putBool("webp", config.enableWebPortal);
     preferences.putInt("sleepT", config.sleepTimeout);
+    preferences.putString("apPass", config.apPassword);
     // Touch calibration
     preferences.putInt("calXMin", config.calXMin);
     preferences.putInt("calXMax", config.calXMax);
@@ -2051,6 +2118,8 @@ void loadConfig() {
     config.showBaseline = preferences.getBool("baseline", true);
     config.enableWebPortal = preferences.getBool("webp", true);
     config.sleepTimeout    = preferences.getInt("sleepT", 1800);  // 30 min default
+    String ap = preferences.getString("apPass", "spypro2026");
+    strncpy(config.apPassword, ap.c_str(), 19); config.apPassword[19] = 0;
     // Touch calibration — default to device-measured 4-corner values
     config.calXMin = preferences.getInt("calXMin", TOUCH_CAL_X_MIN_DEFAULT);
     config.calXMax = preferences.getInt("calXMax", TOUCH_CAL_X_MAX_DEFAULT);
