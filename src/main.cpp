@@ -132,13 +132,23 @@ enum ScanMode { SCAN_QUICK = 0, SCAN_NORMAL = 1, SCAN_POWER_SAVE = 2 };
 enum AlertMode { ALERT_SILENT = 0, ALERT_LED = 1, ALERT_VIBRATE = 2 };
 
 // Priority entry loaded from priority.json
+// Uses char[] instead of String to avoid 732 separate heap allocations for 183 entries.
+// The entire priorityDB vector becomes one contiguous block — no fragmentation.
 struct PriorityEntry {
-    String oui;
-    String label;
-    String context;
-    String correlationGroup;
+    char oui[9];
+    char label[32];
+    char context[48];
+    char correlationGroup[24];
     int priority;
     float confidence;
+    PriorityEntry() { oui[0]=0; label[0]=0; context[0]=0; correlationGroup[0]=0; priority=0; confidence=0.0f; }
+    PriorityEntry(const char* o, const char* l, const char* c, const char* g, int p, float f) {
+        strncpy(oui, o, 8);  oui[8]=0;
+        strncpy(label, l, 31); label[31]=0;
+        strncpy(context, c, 47); context[47]=0;
+        strncpy(correlationGroup, g, 23); correlationGroup[23]=0;
+        priority=p; confidence=f;
+    }
 };
 
 // Correlation rule loaded from priority.json
@@ -434,8 +444,9 @@ bool loadPriorityDB(const char* path) {
     File file = SD.open(path);
     if (!file) return false;
 
-    // Allocate JSON document — 65536 supports 183-entry priority.json
-    DynamicJsonDocument doc(65536);
+    // Allocate JSON document — 32768 comfortably fits 183-entry priority.json
+    // (65536 caused heap fragmentation crash on 2nd WiFi promiscuous cycle)
+    DynamicJsonDocument doc(32768);
     DeserializationError error = deserializeJson(doc, file);
     file.close();
 
@@ -446,16 +457,17 @@ bool loadPriorityDB(const char* path) {
 
     priorityDB.clear();
     priorityLookup.clear();
+    priorityDB.reserve(200);  // one allocation for the whole vector, no realloc churn
 
     // Load entries
     JsonArray entries = doc["entries"];
     for (JsonObject entry : entries) {
         PriorityEntry pe;
-        pe.oui = entry["oui"].as<String>();
-        pe.label = entry["label"].as<String>();
-        pe.context = entry["context"].as<String>();
-        pe.correlationGroup = entry["correlation_group"].as<String>();
-        pe.priority = entry["priority"].as<int>();
+        strncpy(pe.oui,              entry["oui"]               | "", 8);  pe.oui[8]=0;
+        strncpy(pe.label,            entry["label"]             | "", 31); pe.label[31]=0;
+        strncpy(pe.context,          entry["context"]           | "", 47); pe.context[47]=0;
+        strncpy(pe.correlationGroup, entry["correlation_group"] | "", 23); pe.correlationGroup[23]=0;
+        pe.priority   = entry["priority"].as<int>();
         pe.confidence = entry["confidence"].as<float>();
         priorityDB.push_back(pe);
     }
