@@ -105,15 +105,22 @@ Or open the project folder in VS Code and click the PlatformIO Upload button.
 
 ### 2. Prepare SD Card
 
-Format a microSD card as FAT32. Three database files are required for full functionality:
+Format a microSD card as FAT32. Pre-built database files are included in the [`sd_card/`](sd_card/) folder of this repository — copy all three to the **root** of your SD card:
 
-| File | Size | Purpose | How to generate |
-|------|------|---------|-----------------|
-| `oui.bin` | ~1.3 MB | IEEE OUI lookup (38,899 entries) | `python tools/build_oui_db.py` |
-| `btcompany.bin` | ~124 KB | Bluetooth SIG company IDs (3,972 entries) | `python tools/build_bt_db.py` |
-| `priority.json` | ~35 KB | Priority scoring + correlation rules (183 entries) | `python tools/build_priority_db.py` |
+| File | Size | Purpose |
+|------|------|---------|
+| `oui.bin` | ~1.3 MB | IEEE OUI lookup (38,899 entries) |
+| `btcompany.bin` | ~124 KB | Bluetooth SIG company IDs (3,972 entries) |
+| `priority.json` | ~35 KB | Priority scoring + correlation rules (183 entries) |
 
-Copy all three files to the **root** of the SD card. The device hot-detects SD insertion — if a card is inserted after boot, it will remount automatically within ~60 seconds.
+> **Want the latest data?** Rebuild from source with the tools scripts:
+> ```bash
+> python tools/build_oui_db.py        # → oui.bin
+> python tools/build_bt_db.py         # → btcompany.bin
+> python tools/build_priority_db.py   # → priority.json
+> ```
+
+The device hot-detects SD insertion — if a card is inserted after boot, it will remount automatically within ~60 seconds.
 
 Detection logs are saved per-session to `/sessions/<SESSION-ID>.csv` automatically.
 

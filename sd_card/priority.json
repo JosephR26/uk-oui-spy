@@ -1,0 +1,1549 @@
+{
+  "entries": [
+    {
+      "oui": "00:BC:99",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "04:03:12",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "04:EE:CD",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "08:3B:C1",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "08:54:11",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "08:A1:89",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "08:CC:81",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "0C:75:D2",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "10:12:FB",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "18:68:CB",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "18:80:25",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "24:0F:9B",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "24:28:FD",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "24:32:AE",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "24:48:45",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "28:57:BE",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "2C:A5:9C",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "34:09:62",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "3C:1B:F8",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "40:AC:BF",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "44:19:B6",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "44:47:CC",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "44:A6:42",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "48:78:5B",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "4C:1F:86",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "4C:62:DF",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "4C:BD:8F",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "4C:F5:DC",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "50:E5:38",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "54:8C:81",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "54:C4:15",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "58:03:FB",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "58:50:ED",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "5C:34:5B",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "64:DB:8B",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "68:6D:BC",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "74:3F:C2",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "80:48:9F",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "80:7C:62",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "80:BE:AF",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "80:F5:AE",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "84:94:59",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "84:9A:40",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "88:DE:39",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "8C:22:D2",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "8C:E7:48",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "94:E1:AC",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "98:8B:0A",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "98:9D:E5",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "98:DF:82",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "98:F1:12",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "A0:FF:0C",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "A4:14:37",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "A4:29:02",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "A4:4B:D9",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "A4:A4:59",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "A4:D5:C2",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "AC:B9:2F",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "AC:CB:51",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "B4:A3:82",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "BC:5E:33",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "BC:9B:5E",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "BC:AD:28",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "BC:BA:C2",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "C0:51:7E",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "C0:56:E3",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "C4:2F:90",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "C8:A7:02",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "D4:E8:53",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "DC:07:F8",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "DC:D2:6A",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "E0:BA:AD",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "E0:CA:3C",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "E0:DF:13",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "E4:D5:8B",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "E8:A0:ED",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "EC:A9:71",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "EC:C8:9C",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "F8:4D:FC",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "FC:9F:FD",
+      "label": "Hikvision",
+      "context": "UK Council/Police CCTV",
+      "correlation_group": "hikvision_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "08:ED:ED",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "14:A7:8B",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "24:52:6A",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "38:AF:29",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "3C:E3:6B",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "3C:EF:8C",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "4C:11:BF",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "5C:F5:1A",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "64:FD:29",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "6C:1C:71",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "74:C9:29",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "8C:E9:B4",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "90:02:A9",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "98:F9:CC",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "9C:14:63",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "A0:BD:1D",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "B4:4C:3B",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "BC:32:5F",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "C0:39:5A",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "C4:AA:C4",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "D4:43:0E",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "E0:2E:FE",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "E0:50:8B",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "E4:24:6C",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "F4:B1:C2",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "FC:5F:49",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "FC:B6:9D",
+      "label": "Dahua",
+      "context": "UK Council/Retail CCTV",
+      "correlation_group": "dahua_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "00:40:8C",
+      "label": "Axis Communications",
+      "context": "Professional IP Camera",
+      "correlation_group": "axis_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "AC:CC:8E",
+      "label": "Axis Communications",
+      "context": "Professional IP Camera",
+      "correlation_group": "axis_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "B8:A4:4F",
+      "label": "Axis Communications",
+      "context": "Professional IP Camera",
+      "correlation_group": "axis_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "E8:27:25",
+      "label": "Axis Communications",
+      "context": "Professional IP Camera",
+      "correlation_group": "axis_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "04:A8:5A",
+      "label": "DJI",
+      "context": "Commercial/Police Drone",
+      "correlation_group": "dji_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "0C:9A:E6",
+      "label": "DJI",
+      "context": "Commercial/Police Drone",
+      "correlation_group": "dji_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "34:D2:62",
+      "label": "DJI",
+      "context": "Commercial/Police Drone",
+      "correlation_group": "dji_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "48:1C:B9",
+      "label": "DJI",
+      "context": "Commercial/Police Drone",
+      "correlation_group": "dji_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "4C:43:F6",
+      "label": "DJI",
+      "context": "Commercial/Police Drone",
+      "correlation_group": "dji_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "58:B8:58",
+      "label": "DJI",
+      "context": "Commercial/Police Drone",
+      "correlation_group": "dji_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "60:60:1F",
+      "label": "DJI",
+      "context": "Commercial/Police Drone",
+      "correlation_group": "dji_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "88:29:85",
+      "label": "DJI",
+      "context": "Commercial/Police Drone",
+      "correlation_group": "dji_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "8C:58:23",
+      "label": "DJI",
+      "context": "Commercial/Police Drone",
+      "correlation_group": "dji_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "E4:7A:2C",
+      "label": "DJI",
+      "context": "Commercial/Police Drone",
+      "correlation_group": "dji_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "9C:5A:8A",
+      "label": "DJI",
+      "context": "Commercial/Police Drone",
+      "correlation_group": "dji_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "00:12:1C",
+      "label": "Parrot",
+      "context": "Commercial Drone",
+      "correlation_group": "drone_ops",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "00:26:7E",
+      "label": "Parrot",
+      "context": "Commercial Drone",
+      "correlation_group": "drone_ops",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "90:03:B7",
+      "label": "Parrot",
+      "context": "Commercial Drone",
+      "correlation_group": "drone_ops",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "90:3A:E6",
+      "label": "Parrot",
+      "context": "Commercial Drone",
+      "correlation_group": "drone_ops",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "A0:14:3D",
+      "label": "Parrot",
+      "context": "Commercial Drone",
+      "correlation_group": "drone_ops",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "38:1D:14",
+      "label": "Skydio",
+      "context": "Autonomous Drone Ops",
+      "correlation_group": "drone_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "00:25:DF",
+      "label": "Axon Enterprise",
+      "context": "UK Police Body Camera",
+      "correlation_group": "police_bodycam",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "4C:CC:34",
+      "label": "Motorola Solutions",
+      "context": "UK Police Equipment",
+      "correlation_group": "police_radio",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "00:1F:92",
+      "label": "Motorola Solutions",
+      "context": "UK Police Equipment",
+      "correlation_group": "police_radio",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "58:D9:C3",
+      "label": "Motorola Solutions",
+      "context": "UK Police Equipment",
+      "correlation_group": "police_radio",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "00:0A:28",
+      "label": "Motorola Solutions",
+      "context": "UK Police Equipment",
+      "correlation_group": "police_radio",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "00:0E:C7",
+      "label": "Motorola Solutions",
+      "context": "UK Police Equipment",
+      "correlation_group": "police_radio",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "08:38:E6",
+      "label": "Motorola Solutions",
+      "context": "UK Police Equipment",
+      "correlation_group": "police_radio",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "1C:56:FE",
+      "label": "Motorola Solutions",
+      "context": "UK Police Equipment",
+      "correlation_group": "police_radio",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "44:1C:7F",
+      "label": "Motorola Solutions",
+      "context": "UK Police Equipment",
+      "correlation_group": "police_radio",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "84:B8:B8",
+      "label": "Motorola Solutions",
+      "context": "UK Police Equipment",
+      "correlation_group": "police_radio",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "B0:C2:C7",
+      "label": "Motorola Solutions",
+      "context": "UK Police Equipment",
+      "correlation_group": "police_radio",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "C4:84:C0",
+      "label": "Motorola Solutions",
+      "context": "UK Police Equipment",
+      "correlation_group": "police_radio",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "F8:EF:5D",
+      "label": "Motorola Solutions",
+      "context": "UK Police Equipment",
+      "correlation_group": "police_radio",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "00:1E:96",
+      "label": "Sepura",
+      "context": "UK Police TETRA Radio",
+      "correlation_group": "police_radio",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "9C:06:6E",
+      "label": "Hytera",
+      "context": "DMR/TETRA Radio",
+      "correlation_group": "police_radio",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "00:18:85",
+      "label": "Avigilon",
+      "context": "AI Surveillance Camera",
+      "correlation_group": "avigilon_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "70:1A:D5",
+      "label": "Avigilon",
+      "context": "AI Surveillance Camera",
+      "correlation_group": "avigilon_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "00:BF:15",
+      "label": "Genetec",
+      "context": "Facial Recognition VMS",
+      "correlation_group": "genetec_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "0C:BF:15",
+      "label": "Genetec",
+      "context": "Facial Recognition VMS",
+      "correlation_group": "genetec_net",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "00:13:56",
+      "label": "FLIR Systems",
+      "context": "UK Law Enforcement Thermal",
+      "correlation_group": "thermal_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "00:1B:D8",
+      "label": "FLIR Systems",
+      "context": "UK Law Enforcement Thermal",
+      "correlation_group": "thermal_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "00:40:7F",
+      "label": "FLIR Systems",
+      "context": "UK Law Enforcement Thermal",
+      "correlation_group": "thermal_ops",
+      "priority": 5,
+      "confidence": 0.99
+    },
+    {
+      "oui": "00:04:63",
+      "label": "Bosch Security",
+      "context": "CCTV Infrastructure",
+      "correlation_group": "bosch_net",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "30:F0:28",
+      "label": "Bosch Security",
+      "context": "CCTV Infrastructure",
+      "correlation_group": "bosch_net",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "00:09:18",
+      "label": "Hanwha Vision",
+      "context": "IP Camera (Samsung Techwin)",
+      "correlation_group": "hanwha_net",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "E4:30:22",
+      "label": "Hanwha Vision",
+      "context": "IP Camera (Samsung Techwin)",
+      "correlation_group": "hanwha_net",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "48:EA:63",
+      "label": "Uniview",
+      "context": "IP Camera",
+      "correlation_group": "uvn_net",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "6C:F1:7E",
+      "label": "Uniview",
+      "context": "IP Camera",
+      "correlation_group": "uvn_net",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "88:26:3F",
+      "label": "Uniview",
+      "context": "IP Camera",
+      "correlation_group": "uvn_net",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "C4:79:05",
+      "label": "Uniview",
+      "context": "IP Camera",
+      "correlation_group": "uvn_net",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "00:06:8E",
+      "label": "HID Global",
+      "context": "Building Access Control",
+      "correlation_group": "access_ctrl",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "00:17:7A",
+      "label": "Assa Abloy",
+      "context": "Smart Lock/Access Control",
+      "correlation_group": "access_ctrl",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "00:0D:A0",
+      "label": "Nedap",
+      "context": "AEOS Access Control",
+      "correlation_group": "access_ctrl",
+      "priority": 3,
+      "confidence": 0.8
+    },
+    {
+      "oui": "00:04:7D",
+      "label": "Pelco",
+      "context": "CCTV Camera (Motorola)",
+      "correlation_group": "pelco_net",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "00:90:AA",
+      "label": "IndigoVision",
+      "context": "Network Video",
+      "correlation_group": "indigo_net",
+      "priority": 4,
+      "confidence": 0.9
+    },
+    {
+      "oui": "00:10:BE",
+      "label": "March Networks",
+      "context": "Network Video Recorder",
+      "correlation_group": "nvr_net",
+      "priority": 3,
+      "confidence": 0.8
+    },
+    {
+      "oui": "00:12:81",
+      "label": "March Networks",
+      "context": "Network Video Recorder",
+      "correlation_group": "nvr_net",
+      "priority": 3,
+      "confidence": 0.8
+    },
+    {
+      "oui": "EC:71:DB",
+      "label": "Ring",
+      "context": "Consumer Doorbell Camera",
+      "correlation_group": "consumer_cam",
+      "priority": 2,
+      "confidence": 0.7
+    },
+    {
+      "oui": "18:B4:30",
+      "label": "Nest/Google",
+      "context": "Smart Doorbell Camera",
+      "correlation_group": "consumer_cam",
+      "priority": 2,
+      "confidence": 0.7
+    },
+    {
+      "oui": "44:A5:6E",
+      "label": "Arlo",
+      "context": "Wireless Security Camera",
+      "correlation_group": "consumer_cam",
+      "priority": 2,
+      "confidence": 0.7
+    },
+    {
+      "oui": "50:C7:BF",
+      "label": "TP-Link Tapo",
+      "context": "WiFi Security Camera",
+      "correlation_group": "consumer_cam",
+      "priority": 2,
+      "confidence": 0.7
+    },
+    {
+      "oui": "9C:8E:CD",
+      "label": "Reolink",
+      "context": "WiFi Security Camera",
+      "correlation_group": "consumer_cam",
+      "priority": 2,
+      "confidence": 0.7
+    },
+    {
+      "oui": "2C:AA:8E",
+      "label": "Wyze",
+      "context": "Smart Camera",
+      "correlation_group": "consumer_cam",
+      "priority": 2,
+      "confidence": 0.7
+    },
+    {
+      "oui": "74:DA:88",
+      "label": "Sky CPE",
+      "context": "Sky Broadband CPE",
+      "correlation_group": "consumer_isp",
+      "priority": 1,
+      "confidence": 0.5
+    },
+    {
+      "oui": "E4:53:C5",
+      "label": "Sky CPE",
+      "context": "Sky Broadband CPE",
+      "correlation_group": "consumer_isp",
+      "priority": 1,
+      "confidence": 0.5
+    },
+    {
+      "oui": "FC:F8:AE",
+      "label": "BT/EE Hub",
+      "context": "BT/EE Hub",
+      "correlation_group": "consumer_isp",
+      "priority": 1,
+      "confidence": 0.5
+    },
+    {
+      "oui": "00:90:4B",
+      "label": "BT/EE Hub",
+      "context": "BT/EE Hub",
+      "correlation_group": "consumer_isp",
+      "priority": 1,
+      "confidence": 0.5
+    },
+    {
+      "oui": "00:25:4B",
+      "label": "Virgin Media",
+      "context": "Virgin Media Hub",
+      "correlation_group": "consumer_isp",
+      "priority": 1,
+      "confidence": 0.5
+    },
+    {
+      "oui": "00:17:EE",
+      "label": "Virgin Media",
+      "context": "Virgin Media Hub",
+      "correlation_group": "consumer_isp",
+      "priority": 1,
+      "confidence": 0.5
+    },
+    {
+      "oui": "20:8B:FB",
+      "label": "TP-Link",
+      "context": "Consumer Router",
+      "correlation_group": "consumer_isp",
+      "priority": 1,
+      "confidence": 0.5
+    },
+    {
+      "oui": "50:3E:AA",
+      "label": "TP-Link",
+      "context": "Consumer Router",
+      "correlation_group": "consumer_isp",
+      "priority": 1,
+      "confidence": 0.5
+    },
+    {
+      "oui": "B4:FB:E4",
+      "label": "Ubiquiti",
+      "context": "Ubiquiti UniFi AP",
+      "correlation_group": "consumer_isp",
+      "priority": 1,
+      "confidence": 0.5
+    },
+    {
+      "oui": "18:E8:29",
+      "label": "Ubiquiti",
+      "context": "Ubiquiti UniFi AP",
+      "correlation_group": "consumer_isp",
+      "priority": 1,
+      "confidence": 0.5
+    },
+    {
+      "oui": "C4:3D:C7",
+      "label": "Netgear",
+      "context": "Consumer Router",
+      "correlation_group": "consumer_isp",
+      "priority": 1,
+      "confidence": 0.5
+    },
+    {
+      "oui": "A0:40:A0",
+      "label": "Netgear",
+      "context": "Consumer Router",
+      "correlation_group": "consumer_isp",
+      "priority": 1,
+      "confidence": 0.5
+    }
+  ],
+  "correlation_rules": [
+    {
+      "id": "dji_active_ops",
+      "name": "DJI DRONE OPERATIONS",
+      "description": "One or more DJI drones detected in the vicinity — potential police/commercial aerial surveillance",
+      "required_groups": [
+        "dji_ops"
+      ],
+      "min_devices": 1,
+      "alert_level": "CRITICAL"
+    },
+    {
+      "id": "surveillance_cluster",
+      "name": "SURVEILLANCE CLUSTER",
+      "description": "Multiple professional CCTV vendors detected simultaneously indicating a coordinated surveillance network",
+      "required_groups": [
+        "hikvision_net",
+        "dahua_net",
+        "axis_net"
+      ],
+      "min_devices": 3,
+      "alert_level": "HIGH"
+    },
+    {
+      "id": "police_presence",
+      "name": "POLICE PRESENCE DETECTED",
+      "description": "Body camera and police radio equipment detected together indicating active police deployment",
+      "required_groups": [
+        "police_bodycam",
+        "police_radio"
+      ],
+      "min_devices": 2,
+      "alert_level": "CRITICAL"
+    },
+    {
+      "id": "facial_recog_zone",
+      "name": "FACIAL RECOGNITION ZONE",
+      "description": "Genetec VMS infrastructure detected which supports live facial recognition and AutoVu ANPR",
+      "required_groups": [
+        "genetec_net"
+      ],
+      "min_devices": 1,
+      "alert_level": "CRITICAL"
+    },
+    {
+      "id": "drone_ops",
+      "name": "DRONE OPERATIONS DETECTED",
+      "description": "Commercial drone hardware detected — may indicate aerial surveillance or delivery operations",
+      "required_groups": [
+        "drone_ops",
+        "dji_ops"
+      ],
+      "min_devices": 1,
+      "alert_level": "HIGH"
+    },
+    {
+      "id": "thermal_surveillance",
+      "name": "THERMAL SURVEILLANCE",
+      "description": "FLIR thermal imaging equipment detected — typically deployed by law enforcement for covert surveillance",
+      "required_groups": [
+        "thermal_ops"
+      ],
+      "min_devices": 1,
+      "alert_level": "HIGH"
+    },
+    {
+      "id": "multi_vendor_cctv",
+      "name": "MULTI-VENDOR CCTV NETWORK",
+      "description": "Four or more CCTV vendors active simultaneously indicating large-scale integrated surveillance infrastructure",
+      "required_groups": [
+        "hikvision_net",
+        "axis_net",
+        "avigilon_net",
+        "genetec_net",
+        "pelco_net",
+        "dahua_net"
+      ],
+      "min_devices": 4,
+      "alert_level": "HIGH"
+    }
+  ]
+}
