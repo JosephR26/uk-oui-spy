@@ -220,6 +220,55 @@ unsigned long lastInteractionTime = 0;
 int scanInterval = 5000;
 bool scanning = false;
 bool sdCardAvailable = false;
+
+// ============================================================
+// SD OUI LOOKUP  (binary search on /oui.bin — 35 bytes/record)
+// Format: 4-byte LE count header + records sorted by 3-byte OUI
+// ============================================================
+#define OUI_RECORD_SIZE 35
+std::map<String, String> ouiCache;   // lookup cache, max 64 entries
+
+String sdLookupOUI(const String& oui) {
+    // oui must be "XX:XX:XX" uppercase 8-char string
+    if (!sdCardAvailable) return "";
+
+    auto it = ouiCache.find(oui);
+    if (it != ouiCache.end()) return it->second;
+
+    uint8_t target[3];
+    target[0] = (uint8_t)strtol(oui.substring(0, 2).c_str(), nullptr, 16);
+    target[1] = (uint8_t)strtol(oui.substring(3, 5).c_str(), nullptr, 16);
+    target[2] = (uint8_t)strtol(oui.substring(6, 8).c_str(), nullptr, 16);
+
+    File f = SD.open("/oui.bin", FILE_READ);
+    if (!f) return "";
+
+    uint32_t count = 0;
+    f.read((uint8_t*)&count, 4);
+
+    String result = "";
+    int32_t lo = 0, hi = (int32_t)count - 1;
+    uint8_t rec[OUI_RECORD_SIZE];
+
+    while (lo <= hi) {
+        int32_t mid = (lo + hi) / 2;
+        f.seek(4 + (uint32_t)mid * OUI_RECORD_SIZE);
+        if (f.read(rec, OUI_RECORD_SIZE) != OUI_RECORD_SIZE) break;
+        int cmp = memcmp(target, rec, 3);
+        if (cmp == 0) {
+            rec[OUI_RECORD_SIZE - 1] = '\0';
+            result = String((char*)(rec + 3));
+            break;
+        } else if (cmp < 0) { hi = mid - 1; }
+        else                 { lo = mid + 1; }
+    }
+    f.close();
+
+    if (ouiCache.size() >= 64) ouiCache.erase(ouiCache.begin());
+    ouiCache[oui] = result;
+    return result;
+}
+
 float batteryVoltage = 0.0;
 bool touchAvailable = false;
 int wizardStep = 0;
@@ -836,12 +885,14 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name) {
         det.relevance = entry->relevance;
         det.priority = (det.relevance == REL_HIGH) ? 4 : (det.relevance == REL_MEDIUM) ? 3 : 2;
     } else {
-        // Check locally-administered bit (bit 1 of first byte) = randomised/private MAC
         int firstByte = strtol(oui.substring(0, 2).c_str(), nullptr, 16);
         if (firstByte & 0x02) {
+            // Locally-administered bit set = randomised / private MAC (phones, laptops)
             det.manufacturer = "Randomised MAC";
         } else {
-            det.manufacturer = oui;   // real OUI, not a surveillance device
+            // Real OUI — try full IEEE database on SD card
+            String sdName = sdLookupOUI(oui);
+            det.manufacturer = sdName.isEmpty() ? oui : sdName;
         }
         det.category = CAT_UNKNOWN;
         det.relevance = REL_LOW;
@@ -1144,8 +1195,8 @@ void drawMainScreen() {
         );
     }
 
-    // Calculate scroll limits
-    maxScroll = max(0, (int)snapshot.size() - 4);
+    // Calculate scroll limits (42px cards → ~3 visible in 170px list area)
+    maxScroll = max(0, (int)snapshot.size() - 3);
     scrollOffset = constrain(scrollOffset, 0, maxScroll);
 
     // Draw tier headers and items
