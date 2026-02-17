@@ -5,7 +5,7 @@
  * Hardware: ESP32-2432S028 (2.8" ILI9341 TFT, XPT2046 resistive touch)
  * Features: Tiered Priority Display, Correlation Detection Engine,
  *           WiFi Promiscuous Sniffing, FreeRTOS Dual-Core,
- *           Radar Visualization, Setup Wizard, Secure Logging.
+ *           Radar Visualization, Setup Wizard, SD Session Logging.
  */
 
 #define VERSION "3.3.0-PRO"
@@ -31,7 +31,6 @@
 #include "oui_database.h"
 #include "wifi_promiscuous.h"
 #include "web_portal.h"
-#include "mbedtls/aes.h"
 
 // Web Portal AP Configuration
 #define AP_SSID     "OUI-SPY-PRO"
@@ -290,7 +289,6 @@ struct Config {
     bool enableBLE = true;
     bool enableWiFi = true;
     bool enableLogging = true;
-    bool secureLogging = false;
     bool showBaseline = true;   // Show all devices by default
     bool enableWebPortal = true;
     int brightness = 255;
@@ -424,7 +422,6 @@ void handleTouchGestures();
 void handleBootButton();
 void setBrightness(int level);
 void drawToggle(int x, int y, bool state, const char* label);
-void encryptAndLog(String data);
 float readBattery();
 void saveConfig();
 void loadConfig();
@@ -849,7 +846,7 @@ void UITask(void *pvParameters) {
 
 // Settings screen: toggle rows are drawn at these Y origins (from drawSettingsScreen)
 // and the hitbox extends from ROW_Y - SETTINGS_ROW_PAD to ROW_Y + SETTINGS_ROW_HEIGHT - SETTINGS_ROW_PAD.
-static const int SETTINGS_ROW_Y[]     = {42, 66, 90, 114, 138, 162, 186};
+static const int SETTINGS_ROW_Y[]     = {42, 66, 90, 114, 138, 162};
 static const int SETTINGS_ROW_HEIGHT  = 24;
 static const int SETTINGS_HIT_X_MIN   = 20;
 static const int SETTINGS_HIT_X_MAX   = 260;
@@ -1250,8 +1247,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
                 String(det.priority) + "," +
                 String(rssi)         + "," +
                 String(det.sightings);
-            if (config.secureLogging) { f.close(); encryptAndLog(logData); }
-            else { f.println(logData); f.close(); }
+            f.println(logData); f.close();
         }
     }
 }
@@ -1361,7 +1357,6 @@ void setupWebServer() {
         doc["wifi"] = config.enableWiFi;
         doc["promiscuous"] = config.enableWiFi;
         doc["logging"] = config.enableLogging;
-        doc["secure"] = config.secureLogging;
         doc["autoBrightness"] = config.autoBrightness;
         doc["showBaseline"] = config.showBaseline;
         doc["webPortal"] = config.enableWebPortal;
@@ -1380,7 +1375,6 @@ void setupWebServer() {
             if (doc.containsKey("ble")) config.enableBLE = doc["ble"];
             if (doc.containsKey("wifi")) config.enableWiFi = doc["wifi"];
             if (doc.containsKey("logging")) config.enableLogging = doc["logging"];
-            if (doc.containsKey("secure")) config.secureLogging = doc["secure"];
             if (doc.containsKey("autoBrightness")) config.autoBrightness = doc["autoBrightness"];
             if (doc.containsKey("showBaseline")) config.showBaseline = doc["showBaseline"];
             if (doc.containsKey("brightness")) {
@@ -1501,7 +1495,7 @@ void drawNavbar() {
 void drawMainScreen() {
     tft.startWrite();
     tft.fillScreen(COL_BG);
-    drawHeader("SURVEILLANCE LIST");
+    drawHeader("DEVICE LIST");
 
     // ── Stats strip (y=28..46) ──────────────────────────────────────────────
     tft.fillRect(0, 28, 320, 18, COL_HEADER);  // same shade as title bar — clearly visible
@@ -1835,11 +1829,10 @@ void drawSettingsScreen() {
     drawHeader("CONFIGURATION");
     drawToggle(20, 42, config.enableBLE, "BLE Scanning");
     drawToggle(20, 66, config.enableWiFi, "WiFi Scanning");
-    drawToggle(20, 90, config.enableLogging, "SD Logging");
-    drawToggle(20, 114, config.secureLogging, "Secure (AES)");
-    drawToggle(20, 138, config.autoBrightness, "Auto-Brightness");
-    drawToggle(20, 162, config.showBaseline, "Show Baseline");
-    drawToggle(20, 186, config.enableWebPortal, "Web Portal");
+    drawToggle(20, 90,  config.enableLogging,  "SD Logging");
+    drawToggle(20, 114, config.autoBrightness, "Auto-Brightness");
+    drawToggle(20, 138, config.showBaseline,   "Show Baseline");
+    drawToggle(20, 162, config.enableWebPortal,"Web Portal");
     drawNavbar();
     tft.endWrite();
 }
@@ -1974,10 +1967,9 @@ void handleTouchGestures() {
         if (x > SETTINGS_HIT_X_MIN && x < SETTINGS_HIT_X_MAX) {
             bool* toggles[] = {
                 &config.enableBLE, &config.enableWiFi, &config.enableLogging,
-                &config.secureLogging, &config.autoBrightness, &config.showBaseline,
-                &config.enableWebPortal
+                &config.autoBrightness, &config.showBaseline, &config.enableWebPortal
             };
-            for (int i = 0; i < 7; i++) {
+            for (int i = 0; i < 6; i++) {
                 int rowTop = SETTINGS_ROW_Y[i] - 10;
                 int rowBot = SETTINGS_ROW_Y[i] + SETTINGS_ROW_HEIGHT - 5;
                 if (y > rowTop && y < rowBot) {
@@ -2030,38 +2022,6 @@ float readBattery() {
     return (raw / 4095.0) * 2.0 * 3.3 * 1.1;
 }
 
-void encryptAndLog(String data) {
-    mbedtls_aes_context aes;
-    unsigned char key[16];
-    memcpy(key, config.encryptionKey, 16);
-
-    // Multi-block encryption for longer data
-    int dataLen = data.length();
-    int blocks = (dataLen + 15) / 16;
-
-    File f = SD.open("/secure.log", FILE_APPEND);
-    if (!f) return;
-
-    // Write block count header
-    f.write((uint8_t)blocks);
-
-    mbedtls_aes_init(&aes);
-    mbedtls_aes_setkey_enc(&aes, key, 128);
-
-    for (int b = 0; b < blocks; b++) {
-        unsigned char input[16];
-        unsigned char output[16];
-        memset(input, 0, 16);
-        int offset = b * 16;
-        int copyLen = min(16, dataLen - offset);
-        if (copyLen > 0) memcpy(input, data.c_str() + offset, copyLen);
-        mbedtls_aes_crypt_ecb(&aes, MBEDTLS_AES_ENCRYPT, input, output);
-        f.write(output, 16);
-    }
-
-    mbedtls_aes_free(&aes);
-    f.close();
-}
 
 void saveConfig() {
     preferences.begin("uk-oui-spy", false);
@@ -2069,7 +2029,6 @@ void saveConfig() {
     preferences.putBool("ble", config.enableBLE);
     preferences.putBool("wifi", config.enableWiFi);
     preferences.putBool("log", config.enableLogging);
-    preferences.putBool("secure", config.secureLogging);
     preferences.putBool("auto", config.autoBrightness);
     preferences.putBool("baseline", config.showBaseline);
     preferences.putBool("webp", config.enableWebPortal);
@@ -2088,7 +2047,6 @@ void loadConfig() {
     config.enableBLE = preferences.getBool("ble", true);
     config.enableWiFi = preferences.getBool("wifi", true);
     config.enableLogging = preferences.getBool("log", true);
-    config.secureLogging = preferences.getBool("secure", false);
     config.autoBrightness = preferences.getBool("auto", true);
     config.showBaseline = preferences.getBool("baseline", true);
     config.enableWebPortal = preferences.getBool("webp", true);
