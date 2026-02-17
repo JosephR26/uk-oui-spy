@@ -8,7 +8,7 @@
  *           Radar Visualization, Setup Wizard, Secure Logging.
  */
 
-#define VERSION "3.2.0-PRO"
+#define VERSION "3.3.0-PRO"
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -167,24 +167,66 @@ struct BLEMeta {
     bool publicAddr = false;   // true = public/OUI-resolvable, false = random
 };
 
+// Forward-declared here so SD lookup functions can reference it before the global block
+bool sdCardAvailable = false;
+
 // Bluetooth SIG assigned company IDs (most common consumer/surveillance relevant)
+// ── BT SIG company lookup ─────────────────────────────────────────────────
+// Primary: SD /btcompany.bin binary search (32-byte records: 2-byte LE ID + 30-byte name)
+// Fallback: small RAM table for the most common devices when SD unavailable
+#define BT_RECORD_SIZE 32
+#define BT_NAME_SIZE   30
+
+std::map<uint16_t, String> btCache;  // LRU cache, max 64 entries
+
+String sdLookupBTCompany(uint16_t companyId) {
+    if (!sdCardAvailable) return "";
+    auto it = btCache.find(companyId);
+    if (it != btCache.end()) return it->second;
+
+    File f = SD.open("/btcompany.bin", FILE_READ);
+    if (!f) return "";
+
+    uint32_t count = 0;
+    f.read((uint8_t*)&count, 4);
+
+    String result = "";
+    int32_t lo = 0, hi = (int32_t)count - 1;
+    uint8_t rec[BT_RECORD_SIZE];
+    while (lo <= hi) {
+        int32_t mid = (lo + hi) / 2;
+        f.seek(4 + (uint32_t)mid * BT_RECORD_SIZE);
+        if (f.read(rec, BT_RECORD_SIZE) != BT_RECORD_SIZE) break;
+        uint16_t recId = rec[0] | ((uint16_t)rec[1] << 8);
+        if (recId == companyId) {
+            rec[BT_RECORD_SIZE - 1] = '\0';
+            result = String((char*)(rec + 2));
+            Serial.printf("[BT-SD] 0x%04X -> %s\n", companyId, result.c_str());
+            break;
+        } else if (recId < companyId) { lo = mid + 1; }
+        else                           { hi = mid - 1; }
+    }
+    f.close();
+    if (btCache.size() >= 64) btCache.erase(btCache.begin());
+    btCache[companyId] = result;
+    return result;
+}
+
+// RAM fallback — most common BLE manufacturers
 struct BTCompany { uint16_t id; const char* name; };
 static const BTCompany BT_COMPANY_DB[] = {
-    {0x0002,"Intel"},          {0x0006,"Microsoft"},     {0x000F,"Broadcom"},
-    {0x0013,"Texas Instruments"},{0x0019,"Qualcomm"},    {0x0024,"STMicro"},
-    {0x0046,"Parrot"},         {0x0059,"Nordic Semi"},   {0x0075,"Samsung"},
-    {0x0082,"Marvell"},        {0x0087,"Garmin"},        {0x004C,"Apple"},
-    {0x00CF,"Fitbit"},         {0x00E0,"Google"},        {0x00F8,"Huawei"},
-    {0x0102,"Tile Tracker"},   {0x010F,"Murata"},        {0x0117,"Sonos"},
-    {0x011B,"Amazon"},         {0x0135,"Sony"},          {0x0138,"Xiaomi"},
-    {0x0157,"Samsung"},        {0x01FF,"Suunto"},        {0x02E5,"Espressif"},
-    {0x033F,"Sony"},           {0x0344,"OPPO"},          {0x038F,"Google"},
-    {0x048F,"Bosch"},          {0x04FE,"Xiaomi"},        {0x0499,"Ruuvi"},
-    {0x06BE,"DJI"},            {0x1049,"DJI Drone"},
+    {0x0002,"Intel"},        {0x0006,"Microsoft"},  {0x000F,"Broadcom"},
+    {0x0013,"Texas Instr."}, {0x0019,"Qualcomm"},   {0x0024,"STMicro"},
+    {0x0046,"Parrot"},       {0x0059,"Nordic Semi"},{0x0075,"Samsung"},
+    {0x004C,"Apple"},        {0x00E0,"Google"},     {0x011B,"Amazon"},
+    {0x0138,"Xiaomi"},       {0x02E5,"Espressif"},  {0x1049,"DJI Drone"},
 };
 static const int BT_COMPANY_COUNT = sizeof(BT_COMPANY_DB)/sizeof(BT_COMPANY_DB[0]);
 
 String lookupBTCompany(uint16_t id) {
+    // SD first, then RAM fallback
+    String sdResult = sdLookupBTCompany(id);
+    if (!sdResult.isEmpty()) return sdResult;
     for (int i = 0; i < BT_COMPANY_COUNT; i++) {
         if (BT_COMPANY_DB[i].id == id) return String(BT_COMPANY_DB[i].name);
     }
@@ -275,7 +317,6 @@ unsigned long lastScanTime = 0;
 unsigned long lastInteractionTime = 0;
 int scanInterval = 5000;
 bool scanning = false;
-bool sdCardAvailable = false;
 
 // ============================================================
 // SD OUI LOOKUP  (binary search on /oui.bin — 35 bytes/record)
@@ -1024,14 +1065,35 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
         alertLED(det.priority);
     }
 
-    // Log
+    // Log to SD card
     if (config.enableLogging && sdCardAvailable) {
-        String logData = mac + "," + String(rssi) + "," + det.manufacturer +
-                         "," + String(det.priority) + "," + det.context;
-        if (config.secureLogging) encryptAndLog(logData);
-        else {
-            File f = SD.open("/detections.csv", FILE_APPEND);
-            if (f) { f.println(logData); f.close(); }
+        // Write CSV header on first entry
+        bool needHeader = !SD.exists("/detections.csv");
+        File f = SD.open("/detections.csv", FILE_APPEND);
+        if (f) {
+            if (needHeader) {
+                f.println("timestamp_ms,mac,protocol,manufacturer,company,ssid,category,priority,rssi,sightings");
+            }
+            String proto  = isBLE ? "BLE" : "WiFi";
+            String catStr = getCategoryName(det.category);
+            // Quote fields that may contain commas
+            auto q = [](const String& s) -> String {
+                if (s.indexOf(',') >= 0) return "\"" + s + "\"";
+                return s;
+            };
+            String logData =
+                String(millis()) + "," +
+                mac              + "," +
+                proto            + "," +
+                q(det.manufacturer) + "," +
+                q(det.bleCompany)   + "," +
+                q(det.ssid)         + "," +
+                q(catStr)           + "," +
+                String(det.priority) + "," +
+                String(rssi)         + "," +
+                String(det.sightings);
+            if (config.secureLogging) { f.close(); encryptAndLog(logData); }
+            else { f.println(logData); f.close(); }
         }
     }
 }
@@ -1283,11 +1345,41 @@ void drawMainScreen() {
     tft.fillScreen(COL_BG);
     drawHeader("SURVEILLANCE LIST");
 
+    // ── Stats strip (y=28..46) ──────────────────────────────────────────────
+    tft.fillRect(0, 28, 320, 18, 0x0841);  // dark strip
+    xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
+    int bleTotal = 0, wifiTotal = 0, alertCount = 0;
+    for (auto& d : detections) {
+        if (d.isBLE) bleTotal++; else wifiTotal++;
+        if (d.priority >= PRIORITY_HIGH) alertCount++;
+    }
+    int totalDevices = (int)detections.size();
+    xSemaphoreGive(xDetectionMutex);
+
+    tft.setTextSize(1);
+    // BLE count (blue)
+    tft.setTextColor(0x001F); tft.setCursor(5, 31);
+    tft.printf("BLE:%d", bleTotal);
+    // WiFi count (green)
+    tft.setTextColor(0x07E0); tft.setCursor(60, 31);
+    tft.printf("WiFi:%d", wifiTotal);
+    // Alert count (orange if any, grey if zero)
+    tft.setTextColor(alertCount > 0 ? 0xFD20 : 0x4A49);
+    tft.setCursor(125, 31);
+    tft.printf("ALRT:%d", alertCount);
+    // Total devices (white)
+    tft.setTextColor(TFT_WHITE); tft.setCursor(190, 31);
+    tft.printf("TOT:%d", totalDevices);
+    // SD indicator (green=mounted, grey=no SD)
+    tft.setTextColor(sdCardAvailable ? 0x07E0 : 0x4A49);
+    tft.setCursor(260, 31);
+    tft.print(sdCardAvailable ? "SD:OK" : "SD:--");
+
     // Correlation alert banner (if active)
-    int yStart = 30;
+    int yStart = 47;
     if (!activeAlerts.empty()) {
         drawCorrelationBanner();
-        yStart = 52;
+        yStart = 69;
     }
 
     // Take snapshot
@@ -1304,7 +1396,7 @@ void drawMainScreen() {
         );
     }
 
-    // Calculate scroll limits (42px cards → ~3 visible in 170px list area)
+    // Calculate scroll limits (42px cards in 163px list area after stats strip)
     maxScroll = max(0, (int)snapshot.size() - 3);
     scrollOffset = constrain(scrollOffset, 0, maxScroll);
 
@@ -1313,7 +1405,7 @@ void drawMainScreen() {
     int currentTier = -1;
     int itemIndex = 0;
 
-    for (int i = scrollOffset; i < (int)snapshot.size() && y < 200; i++) {
+    for (int i = scrollOffset; i < (int)snapshot.size() && y < 208; i++) {
         auto& det = snapshot[i];
 
         // Draw tier separator when tier changes
@@ -1334,7 +1426,7 @@ void drawMainScreen() {
             }
             tft.printf(" %s", getTierLabel(currentTier));
             y += 16;
-            if (y >= 200) break;
+            if (y >= 208) break;
         }
 
         // ── Intelligence card (3-line, 42px) ──────────────────
@@ -1407,8 +1499,9 @@ void drawMainScreen() {
 
     // Scroll indicator
     if (maxScroll > 0) {
-        int barHeight = max(10, 170 / max(1, (int)snapshot.size()));
-        int barY = map(scrollOffset, 0, maxScroll, yStart, 200 - barHeight);
+        int listH = 208 - yStart;
+        int barHeight = max(10, listH / max(1, (int)snapshot.size()));
+        int barY = map(scrollOffset, 0, maxScroll, yStart, 208 - barHeight);
         tft.fillRoundRect(316, barY, 3, barHeight, 1, COL_ACCENT);
     }
 
