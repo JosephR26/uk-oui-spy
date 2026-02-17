@@ -904,11 +904,38 @@ void setup() {
     initDisplay();
     Serial.println("[BOOT] initDisplay OK");
 
+    // ── Boot splash ──────────────────────────────────────────────────────────
+    tft.fillScreen(0x0000);
+    // Title block
+    tft.fillRect(0, 60, 320, 50, 0x1082);
+    tft.setTextSize(2);
+    tft.setTextColor(0x07FF);  // cyan
+    tft.setCursor(20, 70);
+    tft.print("UK-OUI-SPY PRO");
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_WHITE);
+    tft.setCursor(20, 96);
+    tft.print("v" VERSION "  |  JosephR26");
+    // Tagline
+    tft.setTextColor(0x7BEF);
+    tft.setCursor(20, 120);
+    tft.print("Passive WiFi & BLE Surveillance Detector");
+    // Status line helper — updates a single line at y=160
+    auto bootStatus = [&](const char* msg) {
+        tft.fillRect(0, 155, 320, 14, 0x0000);
+        tft.setTextSize(1);
+        tft.setTextColor(0x07E0);  // green
+        tft.setCursor(10, 158);
+        tft.print(msg);
+    };
+
     Serial.println("[BOOT] initTouch...");
+    bootStatus("Initialising touch...");
     initTouch();
     Serial.println("[BOOT] initTouch OK");
 
     Serial.println("[BOOT] loadConfig...");
+    bootStatus("Loading config...");
     loadConfig();
     Serial.println("[BOOT] loadConfig OK");
     Serial.printf("[BOOT] Touch cal: X=%d..%d  Y=%d..%d\n",
@@ -920,23 +947,33 @@ void setup() {
     Serial.println("[BOOT] Wizard skipped -> SCREEN_MAIN");
 
     Serial.println("[BOOT] initSDCard...");
+    bootStatus("Mounting SD card...");
     initSDCard();
     Serial.println("[BOOT] initSDCard OK");
+    bootStatus(sdCardAvailable ? "SD card OK" : "SD card not found");
+    delay(300);
 
     Serial.printf("[BOOT] OUI database: %d entries\n", OUI_DATABASE_SIZE);
 
     // Load priority database (SD first, then static fallback)
     Serial.println("[BOOT] Loading priority DB...");
+    bootStatus("Loading priority database...");
     if (!loadPriorityDB("/priority.json")) initializeStaticPriorityDB();
     Serial.println("[BOOT] Priority DB OK");
 
     Serial.println("[BOOT] initBLE...");
+    bootStatus("Starting BLE...");
     initBLE();
     Serial.println("[BOOT] initBLE OK");
 
     Serial.println("[BOOT] initWiFi...");
+    bootStatus("Starting WiFi...");
     initWiFi();
     Serial.println("[BOOT] initWiFi OK");
+
+    bootStatus("Ready — starting scan...");
+    delay(500);
+    // ── End boot splash ───────────────────────────────────────────────────────
 
     lastInteractionTime = millis();
     Serial.println("[BOOT] Starting FreeRTOS tasks...");
