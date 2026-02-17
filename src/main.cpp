@@ -297,7 +297,7 @@ String sdLookupOUI(const String& oui) {
     target[2] = (uint8_t)strtol(oui.substring(6, 8).c_str(), nullptr, 16);
 
     File f = SD.open("/oui.bin", FILE_READ);
-    if (!f) return "";
+    if (!f) { Serial.printf("[OUI-SD] ERR: /oui.bin open failed for %s\n", oui.c_str()); return ""; }
 
     uint32_t count = 0;
     f.read((uint8_t*)&count, 4);
@@ -314,6 +314,7 @@ String sdLookupOUI(const String& oui) {
         if (cmp == 0) {
             rec[OUI_RECORD_SIZE - 1] = '\0';
             result = String((char*)(rec + 3));
+            Serial.printf("[OUI-SD] %s -> %s\n", oui.c_str(), result.c_str());
             break;
         } else if (cmp < 0) { hi = mid - 1; }
         else                 { lo = mid + 1; }
@@ -1816,12 +1817,22 @@ void loadConfig() {
     config.autoBrightness = preferences.getBool("auto", true);
     config.showBaseline = preferences.getBool("baseline", true);
     config.enableWebPortal = preferences.getBool("webp", true);
-    // Touch calibration — default to Fr4nkFletcher CYD_28 validated values
+    // Touch calibration — default to device-measured 4-corner values
     config.calXMin = preferences.getInt("calXMin", TOUCH_CAL_X_MIN_DEFAULT);
     config.calXMax = preferences.getInt("calXMax", TOUCH_CAL_X_MAX_DEFAULT);
     config.calYMin = preferences.getInt("calYMin", TOUCH_CAL_Y_MIN_DEFAULT);
     config.calYMax = preferences.getInt("calYMax", TOUCH_CAL_Y_MAX_DEFAULT);
     preferences.end();
+
+    // One-time migration: stale Fr4nkFletcher NVS values → device-measured values
+    if (config.calXMin == 665 && config.calXMax == 3908) {
+        config.calXMin = TOUCH_CAL_X_MIN_DEFAULT;  // 244
+        config.calXMax = TOUCH_CAL_X_MAX_DEFAULT;  // 3742
+        config.calYMin = TOUCH_CAL_Y_MIN_DEFAULT;  // 333
+        config.calYMax = TOUCH_CAL_Y_MAX_DEFAULT;  // 3348
+        saveConfig();
+        Serial.println("[BOOT] Cal migrated: stale NVS -> device-measured values");
+    }
 }
 
 void enterDeepSleep() {
