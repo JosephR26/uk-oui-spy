@@ -928,29 +928,24 @@ void setup() {
     // Divider
     tft.drawFastHLine(0, 46, 320, 0x2104);
 
-    // Stacked status lines: each init step appends a line with [ OK ] or [ -- ]
+    // Stacked status lines with coloured pill badges right-aligned
     int bootY = 52;
-    auto bootLine = [&](const char* label, bool ok) {
+
+    // bootTag: label on left, filled rounded-rect badge on right
+    // tagBg = badge background colour; textCol = badge text colour (default black)
+    auto bootTag = [&](const char* label, const char* tag,
+                       uint16_t tagBg, uint16_t textCol = TFT_BLACK) {
         tft.setTextSize(1);
-        tft.setTextColor(0xC618);                   // light grey label
+        tft.setTextColor(0xC618);       // light grey label
         tft.setCursor(8, bootY);
-        char buf[42];
-        snprintf(buf, sizeof(buf), "%-32s", label); // pad to fixed width
-        tft.print(buf);
-        tft.setTextColor(ok ? 0x07E0 : 0x4A49);     // green=OK, grey=--
-        tft.print(ok ? "[ OK ]" : "[ -- ]");
-        bootY += 14;
-    };
-    auto bootInfo = [&](const char* label, const char* value) {
-        tft.setTextSize(1);
-        tft.setTextColor(0xC618);
-        tft.setCursor(8, bootY);
-        char buf[42];
-        snprintf(buf, sizeof(buf), "%-22s", label);
-        tft.print(buf);
-        tft.setTextColor(0x07FF);   // cyan for info values
-        tft.print(value);
-        bootY += 14;
+        tft.print(label);
+        int tagW = (int)strlen(tag) * 6 + 8;   // 6px/char + 4px each side padding
+        int tagX = 310 - tagW;
+        tft.fillRoundRect(tagX, bootY - 2, tagW, 12, 3, tagBg);
+        tft.setTextColor(textCol);
+        tft.setCursor(tagX + 4, bootY);
+        tft.print(tag);
+        bootY += 16;
     };
 
     // Generate session ID from hardware RNG
@@ -973,12 +968,14 @@ void setup() {
     currentScreen = SCREEN_MAIN;
     Serial.println("[BOOT] Wizard skipped -> SCREEN_MAIN");
 
-    bootLine("Surveillance detector", true);
+    bootTag("Surveillance detector", "ARMED",    0x07E0);          // green
 
     Serial.println("[BOOT] initSDCard...");
     initSDCard();
     Serial.println("[BOOT] initSDCard OK");
-    bootLine("Initialising SD card", sdCardAvailable);
+    bootTag("Initialising SD card",
+            sdCardAvailable ? "ONLINE" : "OFFLINE",
+            sdCardAvailable ? 0x07E0   : 0xFD20);                 // green / orange
 
     Serial.printf("[BOOT] OUI database: %d entries\n", OUI_DATABASE_SIZE);
 
@@ -990,14 +987,19 @@ void setup() {
     Serial.println("[BOOT] initBLE...");
     initBLE();
     Serial.println("[BOOT] initBLE OK");
-    bootLine("BLE scanner", config.enableBLE);
+    bootTag("BLE scanner",
+            config.enableBLE ? "ACTIVE" : "DISABLED",
+            config.enableBLE ? 0x07E0   : 0x4A49);                // green / grey
 
     Serial.println("[BOOT] initWiFi...");
     initWiFi();
     Serial.println("[BOOT] initWiFi OK");
-    bootLine("WiFi scanner", config.enableWiFi);
+    bootTag("WiFi scanner",
+            config.enableWiFi ? "ACTIVE" : "DISABLED",
+            config.enableWiFi ? 0x07E0   : 0x4A49);               // green / grey
 
-    bootInfo("Session ID", sessionId);
+    // Session ID — blue badge, white text
+    bootTag("Session ID", sessionId, 0x001F, TFT_WHITE);
     Serial.printf("[BOOT] Session: %s\n", sessionId);
 
     // NTP time sync — brief attempt; device is AP-only so typically offline
@@ -1008,11 +1010,13 @@ void setup() {
         if (time(nullptr) > 1000000000UL) { ntpOk = true; break; }
         delay(100);
     }
-    bootLine("Syncing time", ntpOk);
+    bootTag("Syncing time",
+            ntpOk ? "SYNCED"  : "OFFLINE",
+            ntpOk ? 0x07E0    : 0xFD20);                          // green / orange
     if (ntpOk) { Serial.println("[BOOT] NTP sync OK"); }
     else        { Serial.println("[BOOT] NTP sync -- (offline/AP-only)"); }
 
-    delay(800);   // let the user read the boot screen before main takes over
+    delay(1000);  // let the user read the boot screen before main takes over
     // ── End boot splash ───────────────────────────────────────────────────────
 
     lastInteractionTime = millis();
