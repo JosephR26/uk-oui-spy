@@ -109,11 +109,9 @@ The embedded web portal operates on a closed local Wi-Fi network created by the 
 
 ### Is the log data encrypted?
 
-Optional. When AES-128 encryption is enabled in Settings, all logs written to the SD card are encrypted.
-
-When encryption is disabled, data is stored as plain CSV. Recommendations:
+No. All logs are written as plain CSV to `/sessions/<SESSION-ID>.csv` on the SD card. Recommendations:
 - Remove the SD card when not in use
-- Delete logs regularly if not needed
+- Delete session logs regularly if not needed
 - Anonymise MAC addresses before sharing any data publicly
 
 ### What about GDPR?

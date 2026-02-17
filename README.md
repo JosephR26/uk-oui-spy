@@ -57,7 +57,7 @@ No hacking. No interception. Just passive listening to publicly broadcast signal
 
 **Correlation Detection** -- Automatically flags coordinated surveillance. Skydio drone + controller? Flashing red `SKYDIO OPS ACTIVE` banner. 3+ government cameras in range? `SURVEILLANCE CLUSTER` alert.
 
-**7-Screen Touchscreen UI** -- LIST, RADAR, GRAPH, HISTORY, MAP, CONFIG, INFO. Swipe navigation, colour-coded priority tiers, real-time filtering.
+**4-Screen Touchscreen UI** -- LIST, RADAR, CONFIG, INFO. Tap navigation, colour-coded priority tiers, real-time filtering.
 
 <!-- Add UI screenshot here: device showing LIST screen with detections -->
 
@@ -65,7 +65,7 @@ No hacking. No interception. Just passive listening to publicly broadcast signal
 
 <!-- Add web portal screenshot here -->
 
-**Secure Logging** -- All detections logged to SD card as CSV. Optional AES-128 encryption. Analyse later with the included Python script or browser-based viewer.
+**Session Logging** -- All detections logged to SD card as plain CSV, one file per boot session (`/sessions/<SESSION-ID>.csv`). Analyse later with the included Python script or browser-based viewer.
 
 **24+ Hour Battery** -- Deep sleep mode on a 1000mAh LiPo. USB-powered for unlimited runtime.
 
@@ -192,7 +192,7 @@ python tools/build_priority_db.py   # Priority + rules   → priority.json
 | Document | Description |
 |----------|-------------|
 | **[Quick Start Guide](QUICKSTART.md)** | 5-minute setup, build, and first scan |
-| **[User Manual](USER_MANUAL.md)** | Complete guide to all 7 screens and features |
+| **[User Manual](USER_MANUAL.md)** | Complete guide to all 4 screens and features |
 | **[Hardware Setup](docs/HARDWARE_SETUP.md)** | Pin assignments, battery, enclosure options |
 | **[FAQ](FAQ.md)** | Common questions and troubleshooting |
 | **[OUI Database Guide](docs/OUI_DATABASE_EXPANSION.md)** | Database format, coverage, adding new manufacturers |

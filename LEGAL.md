@@ -41,6 +41,6 @@ SOFTWARE.
 The UK-OUI-SPY PRO device itself is designed with user privacy as a priority. It does not collect, store, or transmit any personal information of the user.
 
 *   **Data Storage**: All detection data is stored locally on the user-provided microSD card. The developers have no access to this data.
-*   **Encrypted Logging**: The device offers an optional AES-128 encryption feature for logs stored on the SD card. It is the user's responsibility to enable this feature and manage their encryption keys securely.
+*   **Session Logging**: Detection data is written as plain CSV to `/sessions/<SESSION-ID>.csv` on the SD card. Each boot produces a uniquely named log file. Users are responsible for managing and deleting log data they no longer require.
 *   **Web Portal**: The embedded web portal operates on a closed, local Wi-Fi network created by the device. It does not connect to the internet. All communication between the device and the web browser is confined to this local network.
 *   **No Cloud Connectivity**: The device does not connect to the internet and does not transmit detection data to any external server. All data remains on the local SD card and local Wi-Fi portal.

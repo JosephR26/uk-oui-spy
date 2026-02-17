@@ -19,10 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Wi-Fi promiscuous mode** -- full packet capture (probe requests, beacons, management frames), channel hopping (1, 6, 11)
 - **Behavioural analysis** -- classifies devices as FIXED or MOBILE based on RSSI variance
 - **Embedded web portal** -- full dashboard over local Wi-Fi hotspot (OUI-SPY-PRO / spypro2026)
-- **AES-128 encrypted logging** -- optional encryption for SD card logs
+- **Session-based logging** -- per-boot CSV log at `/sessions/<SESSION-ID>.csv`
 - **RGB LED colour coding** -- red = alert, blue = BLE scan, green = Wi-Fi scan
 - **Auto-brightness** -- LDR-based display brightness control
-- **9 configuration toggles** -- BLE, Wi-Fi, promiscuous, SD logging, deep sleep, police filter, encryption, auto-brightness, web portal
+- **6 configuration toggles** -- BLE, Wi-Fi, SD logging, auto-brightness, show baseline, web portal
 
 ### Changed
 - Touch controller support: XPT2046 (SPI, CS on GPIO 33) replaces CST820 (I2C)

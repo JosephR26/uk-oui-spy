@@ -36,7 +36,7 @@ The wizard only runs once unless the configuration is reset.
 
 ## 3. Touchscreen UI
 
-A persistent navigation bar at the bottom of the screen lets you switch between 7 screens.
+A persistent navigation bar at the bottom of the screen lets you switch between 4 screens.
 
 ### 3.1. Screen Reference
 
@@ -44,10 +44,7 @@ A persistent navigation bar at the bottom of the screen lets you switch between 
 |--------|--------|-------------|
 | LIST | Detections | Main screen. Real-time, scrollable list of detected devices |
 | RADAR | Radar | Proximity visualisation -- dots represent detected devices |
-| GRAPH | Signal | RSSI history graph for a selected device |
-| HIST | History | Past detections loaded from the SD card log |
-| MAP | Map | Grid-based proximity map with optional GPS coordinates |
-| CFG | Config | Toggle settings: BLE, Wi-Fi, promiscuous mode, encryption, etc. |
+| CONFIG | Config | Toggle settings: BLE, Wi-Fi, SD logging, auto-brightness, web portal |
 | INFO | Status | Firmware version, battery, memory, OUI count, uptime |
 
 ### 3.2. LIST -- Detection Screen
@@ -57,7 +54,7 @@ The default screen. Shows a live, colour-coded list of all detected devices, sor
 - **Tiered Display** -- Devices grouped by priority (e.g. HIGH VALUE TARGET, SURVEILLANCE INFRA)
 - **Filtering** -- Tap the filter bar (ALL / HIGH / MED / LOW) to show specific relevance levels
 - **Scrolling** -- Swipe up/down to scroll through detections
-- **Selection** -- Tap a device to highlight it and use its data on the GRAPH screen
+- **Selection** -- Tap a device card to highlight it
 
 ### 3.3. RADAR -- Proximity Visualisation
 
@@ -67,35 +64,20 @@ A radar-style view of detected devices.
 - **Distance from centre** = relative signal strength (closer = stronger signal)
 - **Dot colour** = threat score
 
-### 3.4. GRAPH -- Signal Strength History
-
-Plots the RSSI of the device you selected on the LIST screen over time. Useful for determining if a device is moving closer or further away.
-
-### 3.5. HIST -- Detection History
-
-Loads and displays the last 50 entries from `detections.csv` on the SD card. Useful for reviewing past activity without removing the card.
-
-### 3.6. MAP -- Grid Proximity Map
-
-Shows detected devices on a grid. If a GPS module is connected and has a fix, your coordinates are displayed.
-
-### 3.7. CFG -- Configuration
+### 3.4. CONFIG -- Configuration
 
 Real-time configuration toggles:
 
 - BLE scanning on/off
 - Wi-Fi scanning on/off
-- Promiscuous mode on/off
 - SD card logging on/off
-- AES-128 encryption on/off
 - Auto-brightness on/off
+- Show baseline devices on/off
 - Web portal on/off
-- Deep sleep mode on/off
-- Police filter on/off
 
 All settings are saved to non-volatile storage automatically.
 
-### 3.8. INFO -- System Status
+### 3.5. INFO -- System Status
 
 Displays firmware version, battery voltage, OUI database count, free memory, hardware status, total packets captured, recurring device count, uptime, and connected web clients.
 
@@ -147,9 +129,9 @@ Automatically identifies coordinated surveillance operations. Triggers a flashin
 
 The device analyses RSSI fluctuations to classify devices as **FIXED** (stationary, like a CCTV camera) or **MOBILE** (moving, like a body camera or drone).
 
-### 5.4. Secure Logging (AES-128)
+### 5.4. Session Logging
 
-When enabled in Settings, all logs written to the SD card are encrypted using AES-128.
+Each boot creates a new CSV log at `/sessions/<SESSION-ID>.csv` on the SD card. The session ID is randomly generated at boot, so each walk produces a uniquely named file. Pull the card after a session and open the CSV directly in any spreadsheet or analysis tool.
 
 ## 6. Maintenance
 

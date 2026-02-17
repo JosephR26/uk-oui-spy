@@ -63,7 +63,7 @@ A: Any microSD card from 4GB to 32GB, formatted as FAT32. Class 10 recommended. 
 
 - Confirm you're connected to the "OUI-SPY-PRO" Wi-Fi network (password: `spypro2026`)
 - Disable mobile data on your phone temporarily
-- Check that the Web Portal is enabled in the CFG screen
+- Check that the Web Portal is enabled in the CONFIG screen
 
 **Problem: No detections showing.**
 

@@ -46,7 +46,7 @@ The device begins scanning automatically. You'll see detections appear on screen
 - **Yellow** = Medium relevance (traffic, council)
 - **Green** = Low relevance (consumer devices)
 
-Use the **navigation bar** at the bottom to switch between screens (LIST, RADAR, GRAPH, HIST, MAP, CFG, INFO).
+Use the **navigation bar** at the bottom to switch between screens (LIST, RADAR, CONFIG, INFO).
 
 ## Step 5: Web Portal (Optional)
 
