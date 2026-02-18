@@ -2022,7 +2022,7 @@ void drawRadarScreen() {
 
     int visibleCount = 0;
     for (auto& det : snapshot) {
-        if (config.showBaseline || det.priority > PRIORITY_BASELINE) visibleCount++;
+        if (det.priority > PRIORITY_BASELINE) visibleCount++;
     }
     tft.setTextSize(1);
     tft.setTextColor(COL_DIMTEXT);
