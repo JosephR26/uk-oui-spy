@@ -1673,9 +1673,11 @@ void drawHeader(const char* title) {
 
     // Web portal indicator
     if (webPortalActive) {
-        tft.setTextColor(TFT_GREEN);
-        tft.setCursor(245, 10);
-        tft.print("WEB");
+        // Globe icon: outer circle + equator + central meridian oval
+        uint16_t wc = TFT_GREEN;
+        tft.drawCircle(252, 14, 6, wc);
+        tft.drawFastHLine(246, 14, 13, wc);
+        tft.drawEllipse(252, 14, 3, 6, wc);
     }
 
     // SD card icon — notched rectangle (standard SD card silhouette)
