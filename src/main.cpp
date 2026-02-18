@@ -1662,17 +1662,13 @@ void drawHeader(const char* title) {
     tft.setCursor(10, 6);
     tft.print(title);
 
-    // Scanning indicator + last scan counts
+    // Scanning indicator
     tft.setTextSize(1);
     if (scanning) {
         tft.fillCircle(197, 14, 4, COL_ACCENT);
         tft.setCursor(205, 10);
         tft.setTextColor(COL_ACCENT);
         tft.print("SCAN");
-    } else if (totalScanned > 0) {
-        tft.setTextColor(COL_DIMTEXT);
-        tft.setCursor(190, 10);
-        tft.printf("B:%d W:%d", lastBLECount, lastWiFiCount);
     }
 
     // Web portal indicator
