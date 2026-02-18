@@ -431,7 +431,7 @@ void initSDCard();
 void scanBLE();
 void scanWiFi();
 void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name = "", BLEMeta* bleMeta = nullptr, uint8_t channel = 0);
-void addDetection(Detection det);
+bool addDetection(Detection det);
 void updateDisplay();
 void drawWizardScreen();
 void drawMainScreen();
@@ -663,25 +663,30 @@ void runCorrelationEngine() {
 // ALERT SYSTEM
 // ============================================================
 
-// LED alert patterns — red flash only, scaled by severity.
+// LED alert patterns — colour and count scaled by severity.
+// MODERATE = 2 amber pulses (red+green), HIGH = 3 red, CRITICAL = 5 rapid red.
 // Indices must match PRIORITY_* constants (1–5).  Tiers below MODERATE are silent.
 static const struct { uint16_t onMs; uint16_t offMs; uint8_t pulses; } LED_ALERT[] = {
-    [0]                  = {  0,  0, 0},
-    [PRIORITY_BASELINE]  = {  0,  0, 0},
-    [PRIORITY_LOW]       = {  0,  0, 0},
-    [PRIORITY_MODERATE]  = {100,  0, 1},
-    [PRIORITY_HIGH]      = {200,  0, 1},
-    [PRIORITY_CRITICAL]  = { 50, 50, 5},
+    [0]                  = {  0,   0, 0},
+    [PRIORITY_BASELINE]  = {  0,   0, 0},
+    [PRIORITY_LOW]       = {  0,   0, 0},
+    [PRIORITY_MODERATE]  = {100, 100, 2},  // 2 amber pulses (red + green)
+    [PRIORITY_HIGH]      = {150, 100, 3},  // 3 red pulses
+    [PRIORITY_CRITICAL]  = { 50,  50, 5},  // 5 rapid red pulses
 };
 
 void alertLED(int priority) {
     int idx = constrain(priority, 0, 5);
     const auto &a = LED_ALERT[idx];
     if (a.pulses == 0) return;
+    // MODERATE uses amber (red + green together); HIGH and CRITICAL use red only
+    bool amber = (priority == PRIORITY_MODERATE);
     for (uint8_t i = 0; i < a.pulses; i++) {
         digitalWrite(LED_PIN, HIGH);
+        if (amber) digitalWrite(LED_G_PIN, HIGH);
         delay(a.onMs);
         digitalWrite(LED_PIN, LOW);
+        if (amber) digitalWrite(LED_G_PIN, LOW);
         if (a.offMs && i < a.pulses - 1) delay(a.offMs);
     }
 }
@@ -743,6 +748,13 @@ int computeThreatScore(const Detection& det) {
     if      (det.sightings >= 10) score += 5;
     else if (det.sightings >=  5) score += 3;
     else if (det.sightings >=  2) score += 1;
+
+    // Dwell time bonus — a device that has been nearby for minutes is more concerning
+    // than one seen for the first time (passing vehicle vs fixed infrastructure)
+    unsigned long dwellSec = (millis() - det.firstSeen) / 1000;
+    if      (dwellSec >= 300) score += 5;  // 5+ min: almost certainly fixed
+    else if (dwellSec >=  60) score += 3;  // 1-5 min: lingering
+    else if (dwellSec >=  10) score += 1;  // 10s+: not just a passing ping
 
     // Confidence bonus from priority database rating
     score += (int)(det.confidence * 5.0f);
@@ -1280,6 +1292,31 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
         det.confidence = priIt->second->confidence;
     }
 
+    // Infer category from correlationGroup when OUI database has no category match.
+    // Devices in priority.json often lack a compiled OUI entry so category stays UNKNOWN
+    // without this step — which means no category badge and wrong typeStr on the card.
+    if (det.category == CAT_UNKNOWN && !det.correlationGroup.isEmpty()) {
+        String cg = det.correlationGroup;
+        cg.toLowerCase();
+        if      (cg.indexOf("drone") >= 0 || cg.indexOf("dji") >= 0 ||
+                 cg.indexOf("skydio") >= 0 || cg.indexOf("parrot") >= 0)
+            det.category = CAT_DRONE;
+        else if (cg.indexOf("body") >= 0 || cg.indexOf("axon") >= 0 ||
+                 cg.indexOf("wcctv") >= 0 || cg.indexOf("reveal") >= 0)
+            det.category = CAT_BODYCAM;
+        else if (cg.indexOf("anpr") >= 0)
+            det.category = CAT_ANPR;
+        else if (cg.indexOf("face") >= 0 || cg.indexOf("genetec") >= 0 ||
+                 cg.indexOf("nec_") >= 0 || cg.indexOf("cognitec") >= 0)
+            det.category = CAT_FACIAL_RECOG;
+        else if (cg.indexOf("hikvis") >= 0 || cg.indexOf("dahua") >= 0 ||
+                 cg.indexOf("pelco") >= 0  || cg.indexOf("axis_") >= 0)
+            det.category = CAT_CCTV;
+        else if (cg.indexOf("traffic") >= 0 || cg.indexOf("smart_city") >= 0 ||
+                 cg.indexOf("city") >= 0)
+            det.category = CAT_SMART_CITY_INFRA;
+    }
+
     // BLE company-based surveillance boost — catches randomised-MAC devices
     // Manufacturer-specific data company ID is NOT randomised, so DJI/Axon/FLIR
     // can be identified by BT company ID even when MAC is random.
@@ -1329,11 +1366,44 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
         }
     }
 
-    det.threatScore = computeThreatScore(det);
-    addDetection(det);
+    // SSID keyword detection — catches cameras/NVRs that broadcast their brand as SSID
+    // (e.g. "HIKVISION-NVR-01", "Dahua_IPC", "AXIS-P3245") even when OUI is unresolved
+    if (det.category == CAT_UNKNOWN && !det.ssid.isEmpty()) {
+        struct SSIDBoost { const char* keyword; DeviceCategory cat; int pri; };
+        static const SSIDBoost ssidBoosts[] = {
+            {"HIKVISION",  CAT_CCTV,         PRIORITY_HIGH},
+            {"DAHUA",      CAT_CCTV,         PRIORITY_HIGH},
+            {"AXIS-",      CAT_CCTV,         PRIORITY_HIGH},
+            {"AVIGILON",   CAT_FACIAL_RECOG, PRIORITY_CRITICAL},
+            {"GENETEC",    CAT_FACIAL_RECOG, PRIORITY_CRITICAL},
+            {"AXON-",      CAT_BODYCAM,      PRIORITY_HIGH},
+            {"DJI-",       CAT_DRONE,        PRIORITY_HIGH},
+            {"MAVIC",      CAT_DRONE,        PRIORITY_HIGH},
+            {"PHANTOM",    CAT_DRONE,        PRIORITY_MODERATE},
+            {"ANPR",       CAT_ANPR,         PRIORITY_HIGH},
+            {"NVR",        CAT_CCTV,         PRIORITY_MODERATE},
+            {"IPCAM",      CAT_CCTV,         PRIORITY_MODERATE},
+            {"CCTV",       CAT_CCTV,         PRIORITY_MODERATE},
+        };
+        String ssidU = det.ssid;
+        ssidU.toUpperCase();
+        for (const auto& sb : ssidBoosts) {
+            if (ssidU.indexOf(sb.keyword) >= 0) {
+                det.category  = sb.cat;
+                det.priority  = max(det.priority, sb.pri);
+                det.relevance = (sb.pri >= PRIORITY_HIGH) ? REL_HIGH : REL_MEDIUM;
+                Serial.printf("[SSID-BOOST] %s -> cat=%d pri=%d (SSID: %s)\n",
+                              mac.c_str(), (int)sb.cat, sb.pri, det.ssid.c_str());
+                break;
+            }
+        }
+    }
 
-    // Alert based on priority
-    if (det.priority >= PRIORITY_MODERATE) {
+    det.threatScore = computeThreatScore(det);
+    bool isNewDetection = addDetection(det);
+
+    // Alert only on first detection — prevents constant LED spam on persistent devices
+    if (isNewDetection && det.priority >= PRIORITY_MODERATE) {
         alertLED(det.priority);
     }
 
@@ -1369,7 +1439,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
     }
 }
 
-void addDetection(Detection det) {
+bool addDetection(Detection det) {
     xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
     bool found = false;
     for (auto &d : detections) {
@@ -1397,6 +1467,7 @@ void addDetection(Detection det) {
     });
     xSemaphoreGive(xDetectionMutex);
     displayDirty = true;  // New/updated detection → refresh display
+    return !found;  // true = genuinely new device (first sighting)
 }
 
 // ============================================================
