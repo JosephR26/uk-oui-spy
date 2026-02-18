@@ -1697,8 +1697,9 @@ void drawMainScreen() {
         );
     }
 
-    // Calculate scroll limits (42px cards in 163px list area after stats strip)
-    maxScroll = max(0, (int)snapshot.size() - 3);
+    // Calculate scroll limits — baseline cards are 30px, full cards 45px (inc. tier header amortised)
+    // Estimate visible count: use 4 as a conservative default; renderer stops at y>=208 anyway
+    maxScroll = max(0, (int)snapshot.size() - 4);
     scrollOffset = constrain(scrollOffset, 0, maxScroll);
 
     // Draw tier headers and items
@@ -1730,11 +1731,69 @@ void drawMainScreen() {
             if (y >= 208) break;
         }
 
-        // ── Intelligence card (3-line, 42px) ──────────────────
-        uint16_t cardBg = (det.priority >= PRIORITY_CRITICAL) ? COL_CARD_HI : COL_CARD;
-        tft.fillRoundRect(5, y, 310, 42, 3, cardBg);
+        // ── Derive the best primary name for line 1 ────────────────────────
+        // raw OUI = manufacturer is unresolved (e.g. "A4:DA:32")
+        bool rawOUI = (det.manufacturer.length() == 8 && det.manufacturer[2] == ':');
+        // If manufacturer is "Randomised MAC" but BLE company is known, use company instead
+        String primaryName;
+        if (det.manufacturer == "Randomised MAC" && !det.bleCompany.isEmpty()) {
+            primaryName = det.bleCompany;
+        } else if (rawOUI && !det.ssid.isEmpty()) {
+            primaryName = det.ssid;           // SSID is a better identifier than raw OUI bytes
+        } else {
+            primaryName = det.manufacturer;
+        }
+        if (primaryName.length() > 26) primaryName = primaryName.substring(0, 23) + "...";
 
-        // Priority colour bar (6px — clearly visible)
+        // ── BASELINE tier: compact 28px single+mini-line card ──────────────
+        // Saves vertical space so higher-priority devices fit above.
+        if (det.priority <= PRIORITY_BASELINE) {
+            tft.fillRoundRect(5, y, 310, 28, 3, COL_CARD);
+            tft.fillRect(5, y, 4, 28, getTierColor(det.priority));
+
+            // Protocol badge (smaller, right side)
+            uint16_t badgeCol = det.isBLE ? 0x001F : 0x07E0;
+            tft.fillRoundRect(268, y + 2, 38, 10, 2, badgeCol);
+            tft.setTextSize(1);
+            tft.setTextColor(TFT_WHITE);
+            tft.setCursor(272, y + 4);
+            tft.print(det.isBLE ? "BLE" : "WiFi");
+
+            // Line 1: primary name (dim — baseline is low priority)
+            tft.setTextColor(COL_DIMTEXT);
+            tft.setCursor(13, y + 4);
+            String bName = primaryName;
+            if (bName.length() > 24) bName = bName.substring(0, 21) + "...";
+            tft.print(bName);
+
+            // Line 2: MAC prefix + channel/addr type + RSSI + dwell
+            unsigned long dSec = (millis() - det.firstSeen) / 1000;
+            tft.setTextColor(0x39E7); // very dim grey
+            tft.setCursor(13, y + 16);
+            // Show truncated MAC + channel or addr type + RSSI + dwell
+            String macShort = det.macAddress.substring(0, 11) + "..";
+            if (!det.isBLE && det.channel > 0) {
+                tft.printf("%s Ch.%d %ddBm", macShort.c_str(), det.channel, det.rssi);
+            } else if (det.isBLE) {
+                const char* atype = det.blePublicAddr ? "pub" : "rnd";
+                tft.printf("%s %s %ddBm", macShort.c_str(), atype, det.rssi);
+            } else {
+                tft.printf("%s %ddBm", macShort.c_str(), det.rssi);
+            }
+            // Dwell at far right
+            String ds = (dSec < 60) ? String(dSec)+"s" : (dSec<3600) ? String(dSec/60)+"m" : String(dSec/3600)+"h";
+            tft.setCursor(248, y + 16);
+            tft.print(ds);
+
+            y += 30;
+            itemIndex++;
+            continue;
+        }
+
+        // ── Full 42px intelligence card for all other tiers ────────────────
+        tft.fillRoundRect(5, y, 310, 42, 3, (det.priority >= PRIORITY_CRITICAL) ? COL_CARD_HI : COL_CARD);
+
+        // Priority colour bar (6px)
         tft.fillRect(5, y, 6, 42, getTierColor(det.priority));
 
         // Protocol badge (top-right)
@@ -1745,9 +1804,9 @@ void drawMainScreen() {
         tft.setCursor(269, y + 4);
         tft.print(det.isBLE ? " BLE" : "WiFi");
 
-        // Category badge (stacked below protocol badge — colour-coded by type)
+        // Category badge (below protocol badge)
         if (det.category != CAT_UNKNOWN) {
-            uint16_t catBg; const char* catLabel; bool lightBg = false;
+            uint16_t catBg; const char* catLabel;
             switch (det.category) {
                 case CAT_CCTV:                catBg = 0xC000; catLabel = "CCTV";  break;
                 case CAT_ANPR:                catBg = 0xC8A0; catLabel = "ANPR";  break;
@@ -1768,29 +1827,43 @@ void drawMainScreen() {
             tft.print(catLabel);
         }
 
-        // Line 1 — Primary identifier (tier-coloured so risk is immediately visible)
-        // For BLE: prefer company name over raw OUI; for WiFi: SSID if manufacturer unknown
-        bool rawOUI = (det.manufacturer.length() == 8 && det.manufacturer[2] == ':');
-        String primaryName = (!rawOUI || det.ssid.isEmpty()) ? det.manufacturer : det.ssid;
-        if (primaryName.length() > 26) primaryName = primaryName.substring(0, 23) + "...";
+        // Line 1 — Primary identifier
         tft.setTextColor(getTierColor(det.priority));
         tft.setCursor(15, y + 4);
         tft.print(primaryName);
 
-        // Line 2 — Device type / context + RSSI (+ distance for BLE with TX power)
+        // Line 2 — Device type / context + RSSI
+        // Priority: service hint > known category > SSID (if not on line 1)
+        //           > BLE company > channel info > address type > OUI prefix
+        // "Unknown" never appears — we always have *something* real to show.
         tft.setTextColor(COL_DIMTEXT);
         tft.setCursor(15, y + 16);
-        // Choose best descriptor: service hint > category > SSID (if not on line 1) > BLE company
         String typeStr = "";
-        if (!det.bleSvcHint.isEmpty())                              typeStr = det.bleSvcHint;
-        else if (det.category != CAT_UNKNOWN)                       typeStr = getCategoryName(det.category);
-        else if (!det.ssid.isEmpty() && !rawOUI)                    typeStr = det.ssid;
-        else if (!det.bleCompany.isEmpty() && det.bleCompany != det.manufacturer) typeStr = det.bleCompany;
-        else                                                        typeStr = "Unknown";
+        if (!det.bleSvcHint.isEmpty()) {
+            typeStr = det.bleSvcHint;
+        } else if (det.category != CAT_UNKNOWN) {
+            typeStr = getCategoryName(det.category);
+        } else if (!det.ssid.isEmpty() && !rawOUI) {
+            typeStr = det.ssid;
+        } else if (!det.bleCompany.isEmpty() && det.bleCompany != det.manufacturer) {
+            typeStr = det.bleCompany;
+        } else if (!det.isBLE && det.channel > 0) {
+            // WiFi: show channel — always useful for unidentified APs
+            char chbuf[10];
+            snprintf(chbuf, sizeof(chbuf), "Ch.%d", det.channel);
+            typeStr = String(chbuf);
+        } else if (det.isBLE) {
+            // BLE: addr type is always known and meaningful
+            typeStr = det.blePublicAddr ? "Public addr" : "Rand addr";
+        } else if (rawOUI) {
+            // Show OUI prefix so user can look it up
+            typeStr = "OUI:" + det.macAddress.substring(0, 8);
+        } else {
+            typeStr = "Unresolved";   // only if truly nothing is known
+        }
         if (typeStr.length() > 14) typeStr = typeStr.substring(0, 12) + "..";
 
         if (det.isBLE && det.hasTxPower) {
-            // Estimated distance: d = 10^((TxPower - RSSI) / 20)
             float dist = pow(10.0f, ((float)det.txPower - (float)det.rssi) / 20.0f);
             tft.printf("%-14s %ddBm ~%.0fm", typeStr.c_str(), det.rssi,
                        dist < 100.0f ? dist : 99.0f);
@@ -1798,7 +1871,7 @@ void drawMainScreen() {
             tft.printf("%-14s %ddBm", typeStr.c_str(), det.rssi);
         }
 
-        // Line 3 — MAC + address type + dwell time + sightings + confidence
+        // Line 3 — MAC + address type + dwell + sightings + confidence
         unsigned long dwellSec = (millis() - det.firstSeen) / 1000;
         String dwellStr = (dwellSec < 60)   ? String(dwellSec) + "s" :
                           (dwellSec < 3600) ? String(dwellSec / 60) + "m" :
@@ -1806,9 +1879,8 @@ void drawMainScreen() {
         tft.setTextColor(0x4A49);
         tft.setCursor(15, y + 29);
         tft.print(det.macAddress);
-        // Address type indicator for BLE
         if (det.isBLE) {
-            tft.setTextColor(det.blePublicAddr ? 0x07E0 : 0xFD20); // green=public, orange=random
+            tft.setTextColor(det.blePublicAddr ? 0x07E0 : 0xFD20);
             tft.setCursor(130, y + 29);
             tft.print(det.blePublicAddr ? " PUB" : " RND");
         }
@@ -1816,7 +1888,6 @@ void drawMainScreen() {
         tft.setCursor(195, y + 29);
         tft.printf("%s", dwellStr.c_str());
         if (det.sightings > 1) { tft.setCursor(227, y + 29); tft.printf("x%d", det.sightings); }
-        // Confidence % for priority DB hits with meaningful confidence
         if (det.confidence >= 0.7f) {
             tft.setTextColor(getTierColor(det.priority));
             tft.setCursor(265, y + 29);
