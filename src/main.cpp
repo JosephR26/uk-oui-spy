@@ -8,7 +8,7 @@
  *           Radar Visualization, Setup Wizard, SD Session Logging.
  */
 
-#define VERSION "3.3.0-PRO"
+#define VERSION "3.4.0-PRO"
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -263,6 +263,16 @@ String getBLESvcHint(uint16_t uuid) {
         case 0x1805: return "Current Time";     // common in body cams / comms devices
         case 0x180A: return "Device Info";
         case 0xFE03: return "ANT+ Sensor";
+        case 0xFE8A: return "Body Camera";    // Axon/TASER body-worn camera profile
+        case 0xFCA0: return "Drone Control";  // DJI proprietary service
+        case 0xFD82: return "Security Dev";   // Generic security device marker
+        case 0xFEC0: return "Law Enforce";    // Law enforcement comms device
+        case 0xFD5C: return "Asset Tracker";  // Samsung SmartTag / Galaxy
+        case 0xFC3D: return "AirTag";         // Apple AirTag precision-finding
+        case 0xFEDF: return "Tile Tracker";   // Tile Bluetooth tracker (alt UUID)
+        case 0x1800: return "Generic Access";
+        case 0x1802: return "Alert Device";   // Immediate Alert — body-worn alarm
+        case 0x1803: return "Link Loss Dev";  // Link Loss — proximity badge/tracker
         default:     return "";
     }
 }
@@ -290,6 +300,7 @@ struct Detection {
     DeploymentType deployment = DEPLOY_PRIVATE;
     float confidence = 0.0f;
     uint8_t channel = 0;      // WiFi channel (0 = unknown/BLE)
+    int threatScore = 0;      // Composite score 0-100 (priority + proximity + persistence + confidence)
 };
 
 struct Config {
@@ -298,11 +309,9 @@ struct Config {
     bool enableBLE = true;
     bool enableWiFi = true;
     bool enableLogging = true;
-    bool showBaseline = true;   // Show all devices by default
     bool enableWebPortal = true;
     int brightness = 255;
     bool autoBrightness = true;
-    char encryptionKey[17] = "UK-OUI-SPY-2026";
     char apPassword[20]    = "spypro2026";       // web portal hotspot password (8-19 chars)
     bool setupComplete = false;
     int sleepTimeout = 1800;  // seconds — default 30 min, persisted in NVS
@@ -407,6 +416,7 @@ volatile int lastWiFiCount = 0;
 volatile int totalScanned = 0;
 volatile int totalMatched = 0;
 volatile int totalEvicted = 0;  // devices silently dropped when detection buffer was full
+volatile int totalAnonRND  = 0;  // anonymous randomised-MAC pings (no company, no SSID)
 
 // ============================================================
 // FUNCTION PROTOTYPES
@@ -420,7 +430,7 @@ void initSDCard();
 void scanBLE();
 void scanWiFi();
 void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name = "", BLEMeta* bleMeta = nullptr, uint8_t channel = 0);
-void addDetection(Detection det);
+bool addDetection(Detection det);
 void updateDisplay();
 void drawWizardScreen();
 void drawMainScreen();
@@ -445,6 +455,7 @@ uint16_t getTierColor(int priority);
 const char* getTierLabel(int priority);
 int getTierStars(int priority);
 void setupWebServer();
+int computeThreatScore(const Detection& det);
 
 // ============================================================
 // PRIORITY DATABASE LOADER
@@ -651,25 +662,30 @@ void runCorrelationEngine() {
 // ALERT SYSTEM
 // ============================================================
 
-// LED alert patterns — red flash only, scaled by severity.
+// LED alert patterns — colour and count scaled by severity.
+// MODERATE = 2 amber pulses (red+green), HIGH = 3 red, CRITICAL = 5 rapid red.
 // Indices must match PRIORITY_* constants (1–5).  Tiers below MODERATE are silent.
 static const struct { uint16_t onMs; uint16_t offMs; uint8_t pulses; } LED_ALERT[] = {
-    [0]                  = {  0,  0, 0},
-    [PRIORITY_BASELINE]  = {  0,  0, 0},
-    [PRIORITY_LOW]       = {  0,  0, 0},
-    [PRIORITY_MODERATE]  = {100,  0, 1},
-    [PRIORITY_HIGH]      = {200,  0, 1},
-    [PRIORITY_CRITICAL]  = { 50, 50, 5},
+    [0]                  = {  0,   0, 0},
+    [PRIORITY_BASELINE]  = {  0,   0, 0},
+    [PRIORITY_LOW]       = {  0,   0, 0},
+    [PRIORITY_MODERATE]  = {100, 100, 2},  // 2 amber pulses (red + green)
+    [PRIORITY_HIGH]      = {150, 100, 3},  // 3 red pulses
+    [PRIORITY_CRITICAL]  = { 50,  50, 5},  // 5 rapid red pulses
 };
 
 void alertLED(int priority) {
     int idx = constrain(priority, 0, 5);
     const auto &a = LED_ALERT[idx];
     if (a.pulses == 0) return;
+    // MODERATE uses amber (red + green together); HIGH and CRITICAL use red only
+    bool amber = (priority == PRIORITY_MODERATE);
     for (uint8_t i = 0; i < a.pulses; i++) {
         digitalWrite(LED_PIN, HIGH);
+        if (amber) digitalWrite(LED_G_PIN, HIGH);
         delay(a.onMs);
         digitalWrite(LED_PIN, LOW);
+        if (amber) digitalWrite(LED_G_PIN, LOW);
         if (a.offMs && i < a.pulses - 1) delay(a.offMs);
     }
 }
@@ -700,6 +716,49 @@ const char* getTierLabel(int priority) {
 
 int getTierStars(int priority) {
     return constrain(priority, 1, 5);
+}
+
+// ============================================================
+// COMPOSITE THREAT SCORE  (0 – 100)
+// ============================================================
+//
+// Factors:
+//   Priority tier   (0–75):  the OUI/priority tier, weighted heaviest
+//   RSSI proximity  (0–15):  closer = higher threat (stationary near you)
+//   Persistence     (0– 5):  repeated sightings = device is dwelling, not passing
+//   Confidence      (0– 5):  from priority DB confidence rating
+//
+// Score drives display sort order so the most actionable devices
+// always appear at the top regardless of discovery time.
+// ============================================================
+
+int computeThreatScore(const Detection& det) {
+    // Base from priority tier (5 tiers × 15 = max 75)
+    int score = det.priority * 15;
+
+    // Proximity bonus from RSSI
+    if      (det.rssi >= -50) score += 15; // Very close (<5m typical)
+    else if (det.rssi >= -60) score += 10; // Close     (~10m)
+    else if (det.rssi >= -70) score +=  5; // Medium    (~20m)
+    else if (det.rssi >= -80) score +=  2; // Far       (~50m)
+    // <-80 dBm = distant / passing, no bonus
+
+    // Persistence bonus — device staying in range across multiple scan cycles
+    if      (det.sightings >= 10) score += 5;
+    else if (det.sightings >=  5) score += 3;
+    else if (det.sightings >=  2) score += 1;
+
+    // Dwell time bonus — a device that has been nearby for minutes is more concerning
+    // than one seen for the first time (passing vehicle vs fixed infrastructure)
+    unsigned long dwellSec = (millis() - det.firstSeen) / 1000;
+    if      (dwellSec >= 300) score += 5;  // 5+ min: almost certainly fixed
+    else if (dwellSec >=  60) score += 3;  // 1-5 min: lingering
+    else if (dwellSec >=  10) score += 1;  // 10s+: not just a passing ping
+
+    // Confidence bonus from priority database rating
+    score += (int)(det.confidence * 5.0f);
+
+    return constrain(score, 0, 100);
 }
 
 // ============================================================
@@ -751,11 +810,12 @@ class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
 // WIFI PROMISCUOUS CALLBACK
 // ============================================================
 
-void onPromiscuousPacket(const uint8_t* mac, int8_t rssi, uint8_t channel) {
+void onPromiscuousPacket(const uint8_t* mac, int8_t rssi, uint8_t channel, const char* ssid) {
     char macStr[18];
     snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    checkOUI(String(macStr), rssi, false, "", nullptr, channel);
+    // ssid is non-null (may be empty string) — pass through for AP/beacon identification
+    checkOUI(String(macStr), rssi, false, String(ssid), nullptr, channel);
 }
 
 // ============================================================
@@ -861,7 +921,7 @@ void UITask(void *pvParameters) {
 
 // Settings screen: toggle rows are drawn at these Y origins (from drawSettingsScreen)
 // and the hitbox extends from ROW_Y - SETTINGS_ROW_PAD to ROW_Y + SETTINGS_ROW_HEIGHT - SETTINGS_ROW_PAD.
-static const int SETTINGS_ROW_Y[]     = {42, 66, 90, 114, 138, 162};
+static const int SETTINGS_ROW_Y[]     = {42, 66, 90, 114, 138};
 static const int SETTINGS_ROW_HEIGHT  = 24;
 static const int SETTINGS_HIT_X_MIN   = 20;
 static const int SETTINGS_HIT_X_MAX   = 260;
@@ -1197,12 +1257,14 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
     } else {
         int firstByte = strtol(oui.substring(0, 2).c_str(), nullptr, 16);
         if (firstByte & 0x02) {
-            // Locally-administered bit = randomised/private MAC
-            // Use BT company ID as manufacturer if available (works even with random MAC)
+            // Locally-administered (privacy/randomised) MAC.
+            // Only keep if we have a BLE company ID — that gives us real intelligence.
+            // Anything else is an anonymous consumer ping with nothing identifiable.
             if (isBLE && bleMeta && !bleMeta->company.isEmpty()) {
                 det.manufacturer = bleMeta->company;
             } else {
-                det.manufacturer = "Randomised MAC";
+                totalAnonRND++;  // count but don't display — shown as RND counter in status bar
+                return;
             }
         } else {
             // Real OUI: try SD IEEE database, then fall back to raw OUI prefix
@@ -1231,21 +1293,68 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
         det.confidence = priIt->second->confidence;
     }
 
+    // Infer category from correlationGroup when OUI database has no category match.
+    // Devices in priority.json often lack a compiled OUI entry so category stays UNKNOWN
+    // without this step — which means no category badge and wrong typeStr on the card.
+    if (det.category == CAT_UNKNOWN && !det.correlationGroup.isEmpty()) {
+        String cg = det.correlationGroup;
+        cg.toLowerCase();
+        if      (cg.indexOf("drone") >= 0 || cg.indexOf("dji") >= 0 ||
+                 cg.indexOf("skydio") >= 0 || cg.indexOf("parrot") >= 0)
+            det.category = CAT_DRONE;
+        else if (cg.indexOf("body") >= 0 || cg.indexOf("axon") >= 0 ||
+                 cg.indexOf("wcctv") >= 0 || cg.indexOf("reveal") >= 0)
+            det.category = CAT_BODYCAM;
+        else if (cg.indexOf("anpr") >= 0)
+            det.category = CAT_ANPR;
+        else if (cg.indexOf("face") >= 0 || cg.indexOf("genetec") >= 0 ||
+                 cg.indexOf("nec_") >= 0 || cg.indexOf("cognitec") >= 0)
+            det.category = CAT_FACIAL_RECOG;
+        else if (cg.indexOf("hikvis") >= 0 || cg.indexOf("dahua") >= 0 ||
+                 cg.indexOf("pelco") >= 0  || cg.indexOf("axis_") >= 0)
+            det.category = CAT_CCTV;
+        else if (cg.indexOf("traffic") >= 0 || cg.indexOf("smart_city") >= 0 ||
+                 cg.indexOf("city") >= 0)
+            det.category = CAT_SMART_CITY_INFRA;
+    }
+
     // BLE company-based surveillance boost — catches randomised-MAC devices
     // Manufacturer-specific data company ID is NOT randomised, so DJI/Axon/FLIR
     // can be identified by BT company ID even when MAC is random.
     if (isBLE && det.category == CAT_UNKNOWN && !det.bleCompany.isEmpty()) {
         struct BLEBoost { const char* keyword; DeviceCategory cat; int priority; };
         static const BLEBoost boosts[] = {
-            {"DJI",                  CAT_DRONE,   PRIORITY_HIGH},
-            {"Axon",                 CAT_BODYCAM, PRIORITY_HIGH},
-            {"FLIR",                 CAT_CCTV,    PRIORITY_HIGH},
-            {"Motorola Solutions",   CAT_BODYCAM, PRIORITY_MODERATE},
-            {"Hikvision",            CAT_CCTV,    PRIORITY_HIGH},
-            {"Dahua",                CAT_CCTV,    PRIORITY_HIGH},
-            {"Axis Comm",            CAT_CCTV,    PRIORITY_HIGH},
-            {"Avigilon",             CAT_CCTV,    PRIORITY_HIGH},
-            {"Genetec",              CAT_CCTV,    PRIORITY_MODERATE},
+            // ── Drones ────────────────────────────────────────────────────
+            {"DJI",                  CAT_DRONE,            PRIORITY_HIGH},
+            {"Skydio",               CAT_DRONE,            PRIORITY_CRITICAL},
+            {"Parrot",               CAT_DRONE,            PRIORITY_MODERATE},
+            {"Autel",                CAT_DRONE,            PRIORITY_HIGH},
+            // ── Body-worn cameras ─────────────────────────────────────────
+            {"Axon",                 CAT_BODYCAM,          PRIORITY_HIGH},
+            {"Taser",                CAT_BODYCAM,          PRIORITY_HIGH},
+            {"Reveal Media",         CAT_BODYCAM,          PRIORITY_MODERATE},
+            {"WCCTV",                CAT_BODYCAM,          PRIORITY_MODERATE},
+            {"Motorola Solutions",   CAT_BODYCAM,          PRIORITY_MODERATE},
+            // ── Fixed / PTZ surveillance cameras ─────────────────────────
+            {"FLIR",                 CAT_CCTV,             PRIORITY_HIGH},
+            {"Hikvision",            CAT_CCTV,             PRIORITY_HIGH},
+            {"Dahua",                CAT_CCTV,             PRIORITY_HIGH},
+            {"Axis Comm",            CAT_CCTV,             PRIORITY_HIGH},
+            {"Hanwha",               CAT_CCTV,             PRIORITY_HIGH},
+            {"Bosch Security",       CAT_CCTV,             PRIORITY_HIGH},
+            {"Pelco",                CAT_CCTV,             PRIORITY_HIGH},
+            {"Uniview",              CAT_CCTV,             PRIORITY_HIGH},
+            {"Milestone",            CAT_CCTV,             PRIORITY_MODERATE},
+            {"IndigoVision",         CAT_CCTV,             PRIORITY_MODERATE},
+            // ── Facial recognition / AI analytics ────────────────────────
+            {"Avigilon",             CAT_FACIAL_RECOG,     PRIORITY_CRITICAL},
+            {"Genetec",              CAT_FACIAL_RECOG,     PRIORITY_HIGH},
+            {"NEC",                  CAT_FACIAL_RECOG,     PRIORITY_HIGH},
+            {"Briefcam",             CAT_FACIAL_RECOG,     PRIORITY_CRITICAL},
+            // ── ANPR / traffic ────────────────────────────────────────────
+            {"Siemens",              CAT_ANPR,             PRIORITY_HIGH},
+            {"Jenoptik",             CAT_ANPR,             PRIORITY_HIGH},
+            {"Kapsch",               CAT_TRAFFIC,          PRIORITY_MODERATE},
         };
         for (const auto& b : boosts) {
             if (det.bleCompany.indexOf(b.keyword) >= 0) {
@@ -1258,10 +1367,44 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
         }
     }
 
-    addDetection(det);
+    // SSID keyword detection — catches cameras/NVRs that broadcast their brand as SSID
+    // (e.g. "HIKVISION-NVR-01", "Dahua_IPC", "AXIS-P3245") even when OUI is unresolved
+    if (det.category == CAT_UNKNOWN && !det.ssid.isEmpty()) {
+        struct SSIDBoost { const char* keyword; DeviceCategory cat; int pri; };
+        static const SSIDBoost ssidBoosts[] = {
+            {"HIKVISION",  CAT_CCTV,         PRIORITY_HIGH},
+            {"DAHUA",      CAT_CCTV,         PRIORITY_HIGH},
+            {"AXIS-",      CAT_CCTV,         PRIORITY_HIGH},
+            {"AVIGILON",   CAT_FACIAL_RECOG, PRIORITY_CRITICAL},
+            {"GENETEC",    CAT_FACIAL_RECOG, PRIORITY_CRITICAL},
+            {"AXON-",      CAT_BODYCAM,      PRIORITY_HIGH},
+            {"DJI-",       CAT_DRONE,        PRIORITY_HIGH},
+            {"MAVIC",      CAT_DRONE,        PRIORITY_HIGH},
+            {"PHANTOM",    CAT_DRONE,        PRIORITY_MODERATE},
+            {"ANPR",       CAT_ANPR,         PRIORITY_HIGH},
+            {"NVR",        CAT_CCTV,         PRIORITY_MODERATE},
+            {"IPCAM",      CAT_CCTV,         PRIORITY_MODERATE},
+            {"CCTV",       CAT_CCTV,         PRIORITY_MODERATE},
+        };
+        String ssidU = det.ssid;
+        ssidU.toUpperCase();
+        for (const auto& sb : ssidBoosts) {
+            if (ssidU.indexOf(sb.keyword) >= 0) {
+                det.category  = sb.cat;
+                det.priority  = max(det.priority, sb.pri);
+                det.relevance = (sb.pri >= PRIORITY_HIGH) ? REL_HIGH : REL_MEDIUM;
+                Serial.printf("[SSID-BOOST] %s -> cat=%d pri=%d (SSID: %s)\n",
+                              mac.c_str(), (int)sb.cat, sb.pri, det.ssid.c_str());
+                break;
+            }
+        }
+    }
 
-    // Alert based on priority
-    if (det.priority >= PRIORITY_MODERATE) {
+    det.threatScore = computeThreatScore(det);
+    bool isNewDetection = addDetection(det);
+
+    // Alert only on first detection — prevents constant LED spam on persistent devices
+    if (isNewDetection && det.priority >= PRIORITY_MODERATE) {
         alertLED(det.priority);
     }
 
@@ -1297,7 +1440,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
     }
 }
 
-void addDetection(Detection det) {
+bool addDetection(Detection det) {
     xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
     bool found = false;
     for (auto &d : detections) {
@@ -1306,6 +1449,8 @@ void addDetection(Detection det) {
             d.timestamp = millis();
             d.sightings++;
             if (d.ssid.isEmpty() && !det.ssid.isEmpty()) d.ssid = det.ssid;
+            // Recompute threat score with updated sightings and RSSI
+            d.threatScore = computeThreatScore(d);
             found = true;
             break;
         }
@@ -1314,14 +1459,16 @@ void addDetection(Detection det) {
         detections.insert(detections.begin(), det);
         if ((int)detections.size() > MAX_DETECTIONS) { detections.pop_back(); totalEvicted++; }
     }
-    // Sort: most recently seen first (timestamp desc); break ties by priority then RSSI
+    // Sort: highest threat score first; ties broken by priority, then most recent, then RSSI
     std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b) {
-        if (a.timestamp != b.timestamp) return a.timestamp > b.timestamp;
-        if (a.priority  != b.priority)  return a.priority  > b.priority;
+        if (a.threatScore != b.threatScore) return a.threatScore > b.threatScore;
+        if (a.priority    != b.priority)    return a.priority    > b.priority;
+        if (a.timestamp   != b.timestamp)   return a.timestamp   > b.timestamp;
         return a.rssi > b.rssi;
     });
     xSemaphoreGive(xDetectionMutex);
     displayDirty = true;  // New/updated detection → refresh display
+    return !found;  // true = genuinely new device (first sighting)
 }
 
 // ============================================================
@@ -1362,7 +1509,7 @@ void setupWebServer() {
             obj["category"]      = getCategoryName(d.category);
             obj["relevance"]     = getRelevanceName(d.relevance);
             obj["priority"]      = d.priority;
-            obj["threat"]        = d.priority * 20;
+            obj["threat"]        = d.threatScore;
             obj["rssi"]          = d.rssi;
             obj["txPower"]       = d.hasTxPower ? d.txPower : 0;
             obj["hasTxPower"]    = d.hasTxPower;
@@ -1419,7 +1566,6 @@ void setupWebServer() {
         doc["promiscuous"] = config.enableWiFi;
         doc["logging"] = config.enableLogging;
         doc["autoBrightness"] = config.autoBrightness;
-        doc["showBaseline"] = config.showBaseline;
         doc["webPortal"] = config.enableWebPortal;
         doc["brightness"] = config.brightness;
         doc["apPassword"] = config.apPassword;
@@ -1441,7 +1587,6 @@ void setupWebServer() {
             if (doc.containsKey("wifi")) config.enableWiFi = doc["wifi"];
             if (doc.containsKey("logging")) config.enableLogging = doc["logging"];
             if (doc.containsKey("autoBrightness")) config.autoBrightness = doc["autoBrightness"];
-            if (doc.containsKey("showBaseline")) config.showBaseline = doc["showBaseline"];
             if (doc.containsKey("brightness")) {
                 config.brightness = doc["brightness"];
                 setBrightness(config.brightness);
@@ -1517,33 +1662,39 @@ void drawHeader(const char* title) {
     tft.setCursor(10, 6);
     tft.print(title);
 
-    // Scanning indicator + last scan counts
+    // Scanning indicator
     tft.setTextSize(1);
     if (scanning) {
-        tft.fillCircle(210, 14, 4, COL_ACCENT);
-        tft.setCursor(218, 10);
+        tft.fillCircle(197, 14, 4, COL_ACCENT);
+        tft.setCursor(205, 10);
         tft.setTextColor(COL_ACCENT);
         tft.print("SCAN");
-    } else if (totalScanned > 0) {
-        tft.setTextColor(COL_DIMTEXT);
-        tft.setCursor(200, 10);
-        tft.printf("B:%d W:%d", lastBLECount, lastWiFiCount);
     }
 
     // Web portal indicator
     if (webPortalActive) {
-        tft.setTextColor(TFT_GREEN);
-        tft.setCursor(255, 10);
-        tft.print("WEB");
+        // Globe icon: outer circle + equator + central meridian oval
+        uint16_t wc = TFT_GREEN;
+        tft.drawCircle(252, 14, 6, wc);
+        tft.drawFastHLine(246, 14, 13, wc);
+        tft.drawEllipse(252, 14, 3, 6, wc);
     }
 
-    // Battery icon
-    tft.drawRect(285, 7, 25, 12, TFT_WHITE);
-    tft.fillRect(310, 10, 2, 6, TFT_WHITE);
+    // SD card icon — notched rectangle (standard SD card silhouette)
+    // body: 10 x 12 px at (268, 8); top-left corner cut to give card shape
+    {
+        uint16_t sdCol = sdCardAvailable ? 0x07E0 : 0x4A49;
+        tft.fillRect(268, 8,  10, 12, sdCol);   // full body
+        tft.fillRect(268, 8,  4,  4,  COL_HEADER); // notch top-left corner
+    }
+
+    // Battery icon (outline + fill; data may not be accurate yet)
+    tft.drawRect(284, 7, 25, 12, TFT_WHITE);
+    tft.fillRect(309, 10, 2, 6, TFT_WHITE);
     int batPct = constrain(map((int)(batteryVoltage * 100), 330, 420, 0, 100), 0, 100);
     int batWidth = map(batPct, 0, 100, 0, 21);
     uint16_t batColor = batPct < 20 ? TFT_RED : (batPct < 50 ? TFT_YELLOW : TFT_GREEN);
-    tft.fillRect(287, 9, batWidth, 8, batColor);
+    tft.fillRect(286, 9, batWidth, 8, batColor);
 }
 
 void drawNavbar() {
@@ -1587,19 +1738,18 @@ void drawMainScreen() {
     tft.setTextColor(0x001F); tft.setCursor(5, 31);
     tft.printf("BLE:%d", bleTotal);
     // WiFi count (green)
-    tft.setTextColor(0x07E0); tft.setCursor(60, 31);
+    tft.setTextColor(0x07E0); tft.setCursor(53, 31);
     tft.printf("WiFi:%d", wifiTotal);
     // Alert count (orange if any, grey if zero)
     tft.setTextColor(alertCount > 0 ? 0xFD20 : 0x4A49);
-    tft.setCursor(125, 31);
+    tft.setCursor(107, 31);
     tft.printf("ALRT:%d", alertCount);
     // Total devices (white)
-    tft.setTextColor(TFT_WHITE); tft.setCursor(190, 31);
+    tft.setTextColor(TFT_WHITE); tft.setCursor(162, 31);
     tft.printf("TOT:%d", totalDevices);
-    // SD indicator (green=mounted, grey=no SD)
-    tft.setTextColor(sdCardAvailable ? 0x07E0 : 0x4A49);
-    tft.setCursor(260, 31);
-    tft.print(sdCardAvailable ? "SD:OK" : "SD:--");
+    // Anonymous randomised pings (dim — informational noise count)
+    tft.setTextColor(0x4A49); tft.setCursor(210, 31);
+    tft.printf("RND:%d", (int)totalAnonRND);
 
     // Correlation alert banner (if active)
     int yStart = 47;
@@ -1613,17 +1763,16 @@ void drawMainScreen() {
     auto snapshot = detections;
     xSemaphoreGive(xDetectionMutex);
 
-    // Filter baseline if setting is off
-    if (!config.showBaseline) {
-        snapshot.erase(
-            std::remove_if(snapshot.begin(), snapshot.end(),
-                [](const Detection& d) { return d.priority <= PRIORITY_BASELINE; }),
-            snapshot.end()
-        );
-    }
+    // Baseline devices add no surveillance intelligence — always filtered from view
+    snapshot.erase(
+        std::remove_if(snapshot.begin(), snapshot.end(),
+            [](const Detection& d) { return d.priority <= PRIORITY_BASELINE; }),
+        snapshot.end()
+    );
 
-    // Calculate scroll limits (42px cards in 163px list area after stats strip)
-    maxScroll = max(0, (int)snapshot.size() - 3);
+    // Calculate scroll limits — baseline cards are 30px, full cards 45px (inc. tier header amortised)
+    // Estimate visible count: use 4 as a conservative default; renderer stops at y>=208 anyway
+    maxScroll = max(0, (int)snapshot.size() - 4);
     scrollOffset = constrain(scrollOffset, 0, maxScroll);
 
     // Draw tier headers and items
@@ -1655,11 +1804,21 @@ void drawMainScreen() {
             if (y >= 208) break;
         }
 
-        // ── Intelligence card (3-line, 42px) ──────────────────
-        uint16_t cardBg = (det.priority >= PRIORITY_CRITICAL) ? COL_CARD_HI : COL_CARD;
-        tft.fillRoundRect(5, y, 310, 42, 3, cardBg);
+        // ── Derive the best primary name for line 1 ────────────────────────
+        // raw OUI = manufacturer is unresolved (e.g. "A4:DA:32")
+        bool rawOUI = (det.manufacturer.length() == 8 && det.manufacturer[2] == ':');
+        String primaryName;
+        if (rawOUI && !det.ssid.isEmpty()) {
+            primaryName = det.ssid;           // SSID is a better identifier than raw OUI bytes
+        } else {
+            primaryName = det.manufacturer;
+        }
+        if (primaryName.length() > 26) primaryName = primaryName.substring(0, 23) + "...";
 
-        // Priority colour bar (6px — clearly visible)
+        // ── Full 42px intelligence card ────────────────────────────────────
+        tft.fillRoundRect(5, y, 310, 42, 3, (det.priority >= PRIORITY_CRITICAL) ? COL_CARD_HI : COL_CARD);
+
+        // Priority colour bar (6px)
         tft.fillRect(5, y, 6, 42, getTierColor(det.priority));
 
         // Protocol badge (top-right)
@@ -1670,9 +1829,9 @@ void drawMainScreen() {
         tft.setCursor(269, y + 4);
         tft.print(det.isBLE ? " BLE" : "WiFi");
 
-        // Category badge (stacked below protocol badge — colour-coded by type)
+        // Category badge (below protocol badge)
         if (det.category != CAT_UNKNOWN) {
-            uint16_t catBg; const char* catLabel; bool lightBg = false;
+            uint16_t catBg; const char* catLabel;
             switch (det.category) {
                 case CAT_CCTV:                catBg = 0xC000; catLabel = "CCTV";  break;
                 case CAT_ANPR:                catBg = 0xC8A0; catLabel = "ANPR";  break;
@@ -1693,29 +1852,41 @@ void drawMainScreen() {
             tft.print(catLabel);
         }
 
-        // Line 1 — Primary identifier (tier-coloured so risk is immediately visible)
-        // For BLE: prefer company name over raw OUI; for WiFi: SSID if manufacturer unknown
-        bool rawOUI = (det.manufacturer.length() == 8 && det.manufacturer[2] == ':');
-        String primaryName = (!rawOUI || det.ssid.isEmpty()) ? det.manufacturer : det.ssid;
-        if (primaryName.length() > 26) primaryName = primaryName.substring(0, 23) + "...";
+        // Line 1 — Primary identifier
         tft.setTextColor(getTierColor(det.priority));
         tft.setCursor(15, y + 4);
         tft.print(primaryName);
 
-        // Line 2 — Device type / context + RSSI (+ distance for BLE with TX power)
+        // Line 2 — Device type / context + RSSI
+        // Priority: service hint > known category > SSID (if not on line 1)
+        //           > BLE company > channel info > address type > OUI prefix
+        // "Unknown" never appears — we always have *something* real to show.
         tft.setTextColor(COL_DIMTEXT);
         tft.setCursor(15, y + 16);
-        // Choose best descriptor: service hint > category > SSID (if not on line 1) > BLE company
         String typeStr = "";
-        if (!det.bleSvcHint.isEmpty())                              typeStr = det.bleSvcHint;
-        else if (det.category != CAT_UNKNOWN)                       typeStr = getCategoryName(det.category);
-        else if (!det.ssid.isEmpty() && !rawOUI)                    typeStr = det.ssid;
-        else if (!det.bleCompany.isEmpty() && det.bleCompany != det.manufacturer) typeStr = det.bleCompany;
-        else                                                        typeStr = "Unknown";
+        if (!det.bleSvcHint.isEmpty()) {
+            typeStr = det.bleSvcHint;
+        } else if (det.category != CAT_UNKNOWN) {
+            typeStr = getCategoryName(det.category);
+        } else if (!det.ssid.isEmpty() && !rawOUI) {
+            typeStr = det.ssid;
+        } else if (!det.bleCompany.isEmpty() && det.bleCompany != det.manufacturer) {
+            typeStr = det.bleCompany;
+        } else if (!det.isBLE && det.channel > 0) {
+            // WiFi: show channel — always useful for unidentified APs
+            char chbuf[10];
+            snprintf(chbuf, sizeof(chbuf), "Ch.%d", det.channel);
+            typeStr = String(chbuf);
+        } else if (det.isBLE) {
+            typeStr = "BLE Device";
+        } else if (rawOUI) {
+            typeStr = "OUI:" + det.macAddress.substring(0, 8);
+        } else {
+            typeStr = "Device";
+        }
         if (typeStr.length() > 14) typeStr = typeStr.substring(0, 12) + "..";
 
         if (det.isBLE && det.hasTxPower) {
-            // Estimated distance: d = 10^((TxPower - RSSI) / 20)
             float dist = pow(10.0f, ((float)det.txPower - (float)det.rssi) / 20.0f);
             tft.printf("%-14s %ddBm ~%.0fm", typeStr.c_str(), det.rssi,
                        dist < 100.0f ? dist : 99.0f);
@@ -1723,7 +1894,7 @@ void drawMainScreen() {
             tft.printf("%-14s %ddBm", typeStr.c_str(), det.rssi);
         }
 
-        // Line 3 — MAC + address type + dwell time + sightings + confidence
+        // Line 3 — MAC + address type + dwell + sightings + confidence
         unsigned long dwellSec = (millis() - det.firstSeen) / 1000;
         String dwellStr = (dwellSec < 60)   ? String(dwellSec) + "s" :
                           (dwellSec < 3600) ? String(dwellSec / 60) + "m" :
@@ -1731,17 +1902,10 @@ void drawMainScreen() {
         tft.setTextColor(0x4A49);
         tft.setCursor(15, y + 29);
         tft.print(det.macAddress);
-        // Address type indicator for BLE
-        if (det.isBLE) {
-            tft.setTextColor(det.blePublicAddr ? 0x07E0 : 0xFD20); // green=public, orange=random
-            tft.setCursor(130, y + 29);
-            tft.print(det.blePublicAddr ? " PUB" : " RND");
-        }
         tft.setTextColor(0x4A49);
         tft.setCursor(195, y + 29);
         tft.printf("%s", dwellStr.c_str());
         if (det.sightings > 1) { tft.setCursor(227, y + 29); tft.printf("x%d", det.sightings); }
-        // Confidence % for priority DB hits with meaningful confidence
         if (det.confidence >= 0.7f) {
             tft.setTextColor(getTierColor(det.priority));
             tft.setCursor(265, y + 29);
@@ -1845,7 +2009,7 @@ void drawRadarScreen() {
     xSemaphoreGive(xDetectionMutex);
 
     for (auto& det : snapshot) {
-        if (!config.showBaseline && det.priority <= PRIORITY_BASELINE) continue;
+        if (det.priority <= PRIORITY_BASELINE) continue;
 
         // Distance from RSSI
         float dist = map(constrain(det.rssi, -100, -30), -30, -100, 5, r);
@@ -1875,7 +2039,7 @@ void drawRadarScreen() {
     // Empty state for radar
     bool hasVisibleDevices = false;
     for (auto& det : snapshot) {
-        if (config.showBaseline || det.priority > PRIORITY_BASELINE) {
+        if (det.priority > PRIORITY_BASELINE) {
             hasVisibleDevices = true;
             break;
         }
@@ -1907,12 +2071,11 @@ void drawSettingsScreen() {
     tft.startWrite();
     tft.fillScreen(COL_BG);
     drawHeader("CONFIGURATION");
-    drawToggle(20, 42, config.enableBLE, "BLE Scanning");
-    drawToggle(20, 66, config.enableWiFi, "WiFi Scanning");
-    drawToggle(20, 90,  config.enableLogging,  "SD Logging");
-    drawToggle(20, 114, config.autoBrightness, "Auto-Brightness");
-    drawToggle(20, 138, config.showBaseline,   "Show Baseline");
-    drawToggle(20, 162, config.enableWebPortal,"Web Portal");
+    drawToggle(20, 42,  config.enableBLE,       "BLE Scanning");
+    drawToggle(20, 66,  config.enableWiFi,      "WiFi Scanning");
+    drawToggle(20, 90,  config.enableLogging,   "SD Logging");
+    drawToggle(20, 114, config.autoBrightness,  "Auto-Brightness");
+    drawToggle(20, 138, config.enableWebPortal, "Web Portal");
     drawNavbar();
     tft.endWrite();
 }
@@ -2049,9 +2212,9 @@ void handleTouchGestures() {
         if (x > SETTINGS_HIT_X_MIN && x < SETTINGS_HIT_X_MAX) {
             bool* toggles[] = {
                 &config.enableBLE, &config.enableWiFi, &config.enableLogging,
-                &config.autoBrightness, &config.showBaseline, &config.enableWebPortal
+                &config.autoBrightness, &config.enableWebPortal
             };
-            for (int i = 0; i < 6; i++) {
+            for (int i = 0; i < 5; i++) {
                 int rowTop = SETTINGS_ROW_Y[i] - 10;
                 int rowBot = SETTINGS_ROW_Y[i] + SETTINGS_ROW_HEIGHT - 5;
                 if (y > rowTop && y < rowBot) {
@@ -2112,7 +2275,6 @@ void saveConfig() {
     preferences.putBool("wifi", config.enableWiFi);
     preferences.putBool("log", config.enableLogging);
     preferences.putBool("auto", config.autoBrightness);
-    preferences.putBool("baseline", config.showBaseline);
     preferences.putBool("webp", config.enableWebPortal);
     preferences.putInt("sleepT", config.sleepTimeout);
     preferences.putString("apPass", config.apPassword);
@@ -2131,7 +2293,6 @@ void loadConfig() {
     config.enableWiFi = preferences.getBool("wifi", true);
     config.enableLogging = preferences.getBool("log", true);
     config.autoBrightness = preferences.getBool("auto", true);
-    config.showBaseline = preferences.getBool("baseline", true);
     config.enableWebPortal = preferences.getBool("webp", true);
     config.sleepTimeout    = preferences.getInt("sleepT", 1800);  // 30 min default
     String ap = preferences.getString("apPass", "spypro2026");
