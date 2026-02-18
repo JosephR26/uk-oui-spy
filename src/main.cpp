@@ -416,6 +416,7 @@ volatile int lastWiFiCount = 0;
 volatile int totalScanned = 0;
 volatile int totalMatched = 0;
 volatile int totalEvicted = 0;  // devices silently dropped when detection buffer was full
+volatile int totalAnonRND  = 0;  // anonymous randomised-MAC pings (no company, no SSID)
 
 // ============================================================
 // FUNCTION PROTOTYPES
@@ -1262,7 +1263,8 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
             if (isBLE && bleMeta && !bleMeta->company.isEmpty()) {
                 det.manufacturer = bleMeta->company;
             } else {
-                return;  // Skip — no identifying information available
+                totalAnonRND++;  // count but don't display — shown as RND counter in status bar
+                return;
             }
         } else {
             // Real OUI: try SD IEEE database, then fall back to raw OUI prefix
@@ -1730,18 +1732,21 @@ void drawMainScreen() {
     tft.setTextColor(0x001F); tft.setCursor(5, 31);
     tft.printf("BLE:%d", bleTotal);
     // WiFi count (green)
-    tft.setTextColor(0x07E0); tft.setCursor(60, 31);
+    tft.setTextColor(0x07E0); tft.setCursor(53, 31);
     tft.printf("WiFi:%d", wifiTotal);
     // Alert count (orange if any, grey if zero)
     tft.setTextColor(alertCount > 0 ? 0xFD20 : 0x4A49);
-    tft.setCursor(125, 31);
+    tft.setCursor(107, 31);
     tft.printf("ALRT:%d", alertCount);
     // Total devices (white)
-    tft.setTextColor(TFT_WHITE); tft.setCursor(190, 31);
+    tft.setTextColor(TFT_WHITE); tft.setCursor(162, 31);
     tft.printf("TOT:%d", totalDevices);
+    // Anonymous randomised pings (dim — informational noise count)
+    tft.setTextColor(0x4A49); tft.setCursor(210, 31);
+    tft.printf("RND:%d", (int)totalAnonRND);
     // SD indicator (green=mounted, grey=no SD)
     tft.setTextColor(sdCardAvailable ? 0x07E0 : 0x4A49);
-    tft.setCursor(260, 31);
+    tft.setCursor(265, 31);
     tft.print(sdCardAvailable ? "SD:OK" : "SD:--");
 
     // Correlation alert banner (if active)
