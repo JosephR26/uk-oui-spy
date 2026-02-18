@@ -505,7 +505,7 @@ const char* getCategoryName(DeviceCategory cat) {
         case CAT_FACIAL_RECOG: return "Face Recog";
         case CAT_PARKING_ENFORCEMENT: return "Parking";
         case CAT_SMART_CITY_INFRA: return "Smart Pole";
-        default: return "Unknown";
+        default: return "Device";
     }
 }
 
@@ -514,7 +514,7 @@ const char* getRelevanceName(RelevanceLevel rel) {
         case REL_HIGH: return "HIGH";
         case REL_MEDIUM: return "MEDIUM";
         case REL_LOW: return "LOW";
-        default: return "UNKNOWN";
+        default: return "LOW";
     }
 }
 

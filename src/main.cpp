@@ -309,11 +309,9 @@ struct Config {
     bool enableBLE = true;
     bool enableWiFi = true;
     bool enableLogging = true;
-    bool showBaseline = true;   // Show all devices by default
     bool enableWebPortal = true;
     int brightness = 255;
     bool autoBrightness = true;
-    char encryptionKey[17] = "UK-OUI-SPY-2026";
     char apPassword[20]    = "spypro2026";       // web portal hotspot password (8-19 chars)
     bool setupComplete = false;
     int sleepTimeout = 1800;  // seconds — default 30 min, persisted in NVS
@@ -922,7 +920,7 @@ void UITask(void *pvParameters) {
 
 // Settings screen: toggle rows are drawn at these Y origins (from drawSettingsScreen)
 // and the hitbox extends from ROW_Y - SETTINGS_ROW_PAD to ROW_Y + SETTINGS_ROW_HEIGHT - SETTINGS_ROW_PAD.
-static const int SETTINGS_ROW_Y[]     = {42, 66, 90, 114, 138, 162};
+static const int SETTINGS_ROW_Y[]     = {42, 66, 90, 114, 138};
 static const int SETTINGS_ROW_HEIGHT  = 24;
 static const int SETTINGS_HIT_X_MIN   = 20;
 static const int SETTINGS_HIT_X_MAX   = 260;
@@ -1258,12 +1256,13 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
     } else {
         int firstByte = strtol(oui.substring(0, 2).c_str(), nullptr, 16);
         if (firstByte & 0x02) {
-            // Locally-administered bit = randomised/private MAC
-            // Use BT company ID as manufacturer if available (works even with random MAC)
+            // Locally-administered (privacy/randomised) MAC.
+            // Only keep if we have a BLE company ID — that gives us real intelligence.
+            // Anything else is an anonymous consumer ping with nothing identifiable.
             if (isBLE && bleMeta && !bleMeta->company.isEmpty()) {
                 det.manufacturer = bleMeta->company;
             } else {
-                det.manufacturer = "Randomised MAC";
+                return;  // Skip — no identifying information available
             }
         } else {
             // Real OUI: try SD IEEE database, then fall back to raw OUI prefix
@@ -1565,7 +1564,6 @@ void setupWebServer() {
         doc["promiscuous"] = config.enableWiFi;
         doc["logging"] = config.enableLogging;
         doc["autoBrightness"] = config.autoBrightness;
-        doc["showBaseline"] = config.showBaseline;
         doc["webPortal"] = config.enableWebPortal;
         doc["brightness"] = config.brightness;
         doc["apPassword"] = config.apPassword;
@@ -1587,7 +1585,6 @@ void setupWebServer() {
             if (doc.containsKey("wifi")) config.enableWiFi = doc["wifi"];
             if (doc.containsKey("logging")) config.enableLogging = doc["logging"];
             if (doc.containsKey("autoBrightness")) config.autoBrightness = doc["autoBrightness"];
-            if (doc.containsKey("showBaseline")) config.showBaseline = doc["showBaseline"];
             if (doc.containsKey("brightness")) {
                 config.brightness = doc["brightness"];
                 setBrightness(config.brightness);
@@ -1759,14 +1756,12 @@ void drawMainScreen() {
     auto snapshot = detections;
     xSemaphoreGive(xDetectionMutex);
 
-    // Filter baseline if setting is off
-    if (!config.showBaseline) {
-        snapshot.erase(
-            std::remove_if(snapshot.begin(), snapshot.end(),
-                [](const Detection& d) { return d.priority <= PRIORITY_BASELINE; }),
-            snapshot.end()
-        );
-    }
+    // Baseline devices add no surveillance intelligence — always filtered from view
+    snapshot.erase(
+        std::remove_if(snapshot.begin(), snapshot.end(),
+            [](const Detection& d) { return d.priority <= PRIORITY_BASELINE; }),
+        snapshot.end()
+    );
 
     // Calculate scroll limits — baseline cards are 30px, full cards 45px (inc. tier header amortised)
     // Estimate visible count: use 4 as a conservative default; renderer stops at y>=208 anyway
@@ -1805,63 +1800,15 @@ void drawMainScreen() {
         // ── Derive the best primary name for line 1 ────────────────────────
         // raw OUI = manufacturer is unresolved (e.g. "A4:DA:32")
         bool rawOUI = (det.manufacturer.length() == 8 && det.manufacturer[2] == ':');
-        // If manufacturer is "Randomised MAC" but BLE company is known, use company instead
         String primaryName;
-        if (det.manufacturer == "Randomised MAC" && !det.bleCompany.isEmpty()) {
-            primaryName = det.bleCompany;
-        } else if (rawOUI && !det.ssid.isEmpty()) {
+        if (rawOUI && !det.ssid.isEmpty()) {
             primaryName = det.ssid;           // SSID is a better identifier than raw OUI bytes
         } else {
             primaryName = det.manufacturer;
         }
         if (primaryName.length() > 26) primaryName = primaryName.substring(0, 23) + "...";
 
-        // ── BASELINE tier: compact 28px single+mini-line card ──────────────
-        // Saves vertical space so higher-priority devices fit above.
-        if (det.priority <= PRIORITY_BASELINE) {
-            tft.fillRoundRect(5, y, 310, 28, 3, COL_CARD);
-            tft.fillRect(5, y, 4, 28, getTierColor(det.priority));
-
-            // Protocol badge (smaller, right side)
-            uint16_t badgeCol = det.isBLE ? 0x001F : 0x07E0;
-            tft.fillRoundRect(268, y + 2, 38, 10, 2, badgeCol);
-            tft.setTextSize(1);
-            tft.setTextColor(TFT_WHITE);
-            tft.setCursor(272, y + 4);
-            tft.print(det.isBLE ? "BLE" : "WiFi");
-
-            // Line 1: primary name (dim — baseline is low priority)
-            tft.setTextColor(COL_DIMTEXT);
-            tft.setCursor(13, y + 4);
-            String bName = primaryName;
-            if (bName.length() > 24) bName = bName.substring(0, 21) + "...";
-            tft.print(bName);
-
-            // Line 2: MAC prefix + channel/addr type + RSSI + dwell
-            unsigned long dSec = (millis() - det.firstSeen) / 1000;
-            tft.setTextColor(0x39E7); // very dim grey
-            tft.setCursor(13, y + 16);
-            // Show truncated MAC + channel or addr type + RSSI + dwell
-            String macShort = det.macAddress.substring(0, 11) + "..";
-            if (!det.isBLE && det.channel > 0) {
-                tft.printf("%s Ch.%d %ddBm", macShort.c_str(), det.channel, det.rssi);
-            } else if (det.isBLE) {
-                const char* atype = det.blePublicAddr ? "pub" : "rnd";
-                tft.printf("%s %s %ddBm", macShort.c_str(), atype, det.rssi);
-            } else {
-                tft.printf("%s %ddBm", macShort.c_str(), det.rssi);
-            }
-            // Dwell at far right
-            String ds = (dSec < 60) ? String(dSec)+"s" : (dSec<3600) ? String(dSec/60)+"m" : String(dSec/3600)+"h";
-            tft.setCursor(248, y + 16);
-            tft.print(ds);
-
-            y += 30;
-            itemIndex++;
-            continue;
-        }
-
-        // ── Full 42px intelligence card for all other tiers ────────────────
+        // ── Full 42px intelligence card ────────────────────────────────────
         tft.fillRoundRect(5, y, 310, 42, 3, (det.priority >= PRIORITY_CRITICAL) ? COL_CARD_HI : COL_CARD);
 
         // Priority colour bar (6px)
@@ -1924,13 +1871,11 @@ void drawMainScreen() {
             snprintf(chbuf, sizeof(chbuf), "Ch.%d", det.channel);
             typeStr = String(chbuf);
         } else if (det.isBLE) {
-            // BLE: addr type is always known and meaningful
-            typeStr = det.blePublicAddr ? "Public addr" : "Rand addr";
+            typeStr = "BLE Device";
         } else if (rawOUI) {
-            // Show OUI prefix so user can look it up
             typeStr = "OUI:" + det.macAddress.substring(0, 8);
         } else {
-            typeStr = "Unresolved";   // only if truly nothing is known
+            typeStr = "Device";
         }
         if (typeStr.length() > 14) typeStr = typeStr.substring(0, 12) + "..";
 
@@ -1950,11 +1895,6 @@ void drawMainScreen() {
         tft.setTextColor(0x4A49);
         tft.setCursor(15, y + 29);
         tft.print(det.macAddress);
-        if (det.isBLE) {
-            tft.setTextColor(det.blePublicAddr ? 0x07E0 : 0xFD20);
-            tft.setCursor(130, y + 29);
-            tft.print(det.blePublicAddr ? " PUB" : " RND");
-        }
         tft.setTextColor(0x4A49);
         tft.setCursor(195, y + 29);
         tft.printf("%s", dwellStr.c_str());
@@ -2062,7 +2002,7 @@ void drawRadarScreen() {
     xSemaphoreGive(xDetectionMutex);
 
     for (auto& det : snapshot) {
-        if (!config.showBaseline && det.priority <= PRIORITY_BASELINE) continue;
+        if (det.priority <= PRIORITY_BASELINE) continue;
 
         // Distance from RSSI
         float dist = map(constrain(det.rssi, -100, -30), -30, -100, 5, r);
@@ -2092,7 +2032,7 @@ void drawRadarScreen() {
     // Empty state for radar
     bool hasVisibleDevices = false;
     for (auto& det : snapshot) {
-        if (config.showBaseline || det.priority > PRIORITY_BASELINE) {
+        if (det.priority > PRIORITY_BASELINE) {
             hasVisibleDevices = true;
             break;
         }
@@ -2124,12 +2064,11 @@ void drawSettingsScreen() {
     tft.startWrite();
     tft.fillScreen(COL_BG);
     drawHeader("CONFIGURATION");
-    drawToggle(20, 42, config.enableBLE, "BLE Scanning");
-    drawToggle(20, 66, config.enableWiFi, "WiFi Scanning");
-    drawToggle(20, 90,  config.enableLogging,  "SD Logging");
-    drawToggle(20, 114, config.autoBrightness, "Auto-Brightness");
-    drawToggle(20, 138, config.showBaseline,   "Show Baseline");
-    drawToggle(20, 162, config.enableWebPortal,"Web Portal");
+    drawToggle(20, 42,  config.enableBLE,       "BLE Scanning");
+    drawToggle(20, 66,  config.enableWiFi,      "WiFi Scanning");
+    drawToggle(20, 90,  config.enableLogging,   "SD Logging");
+    drawToggle(20, 114, config.autoBrightness,  "Auto-Brightness");
+    drawToggle(20, 138, config.enableWebPortal, "Web Portal");
     drawNavbar();
     tft.endWrite();
 }
@@ -2266,9 +2205,9 @@ void handleTouchGestures() {
         if (x > SETTINGS_HIT_X_MIN && x < SETTINGS_HIT_X_MAX) {
             bool* toggles[] = {
                 &config.enableBLE, &config.enableWiFi, &config.enableLogging,
-                &config.autoBrightness, &config.showBaseline, &config.enableWebPortal
+                &config.autoBrightness, &config.enableWebPortal
             };
-            for (int i = 0; i < 6; i++) {
+            for (int i = 0; i < 5; i++) {
                 int rowTop = SETTINGS_ROW_Y[i] - 10;
                 int rowBot = SETTINGS_ROW_Y[i] + SETTINGS_ROW_HEIGHT - 5;
                 if (y > rowTop && y < rowBot) {
@@ -2329,7 +2268,6 @@ void saveConfig() {
     preferences.putBool("wifi", config.enableWiFi);
     preferences.putBool("log", config.enableLogging);
     preferences.putBool("auto", config.autoBrightness);
-    preferences.putBool("baseline", config.showBaseline);
     preferences.putBool("webp", config.enableWebPortal);
     preferences.putInt("sleepT", config.sleepTimeout);
     preferences.putString("apPass", config.apPassword);
@@ -2348,7 +2286,6 @@ void loadConfig() {
     config.enableWiFi = preferences.getBool("wifi", true);
     config.enableLogging = preferences.getBool("log", true);
     config.autoBrightness = preferences.getBool("auto", true);
-    config.showBaseline = preferences.getBool("baseline", true);
     config.enableWebPortal = preferences.getBool("webp", true);
     config.sleepTimeout    = preferences.getInt("sleepT", 1800);  // 30 min default
     String ap = preferences.getString("apPass", "spypro2026");
