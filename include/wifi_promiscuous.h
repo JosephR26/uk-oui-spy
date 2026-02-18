@@ -34,8 +34,8 @@ typedef struct {
     uint8_t payload[0]; // Network data
 } wifi_ieee80211_packet_t;
 
-// Callback function type
-typedef void (*wifi_promiscuous_callback_t)(const uint8_t* addr, int8_t rssi, uint8_t channel);
+// Callback function type — now includes SSID extracted from the frame (empty string if none)
+typedef void (*wifi_promiscuous_callback_t)(const uint8_t* addr, int8_t rssi, uint8_t channel, const char* ssid);
 
 // Function prototypes
 void initWiFiPromiscuous();
@@ -43,5 +43,6 @@ void startWiFiPromiscuous(wifi_promiscuous_callback_t callback);
 void stopWiFiPromiscuous();
 void setPromiscuousChannel(uint8_t channel);
 void scanAllChannels(wifi_promiscuous_callback_t callback, int dwell_time_ms);
+void resetDetectionCache();
 
 #endif

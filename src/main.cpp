@@ -8,7 +8,7 @@
  *           Radar Visualization, Setup Wizard, SD Session Logging.
  */
 
-#define VERSION "3.3.0-PRO"
+#define VERSION "3.4.0-PRO"
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
@@ -263,6 +263,16 @@ String getBLESvcHint(uint16_t uuid) {
         case 0x1805: return "Current Time";     // common in body cams / comms devices
         case 0x180A: return "Device Info";
         case 0xFE03: return "ANT+ Sensor";
+        case 0xFE8A: return "Body Camera";    // Axon/TASER body-worn camera profile
+        case 0xFCA0: return "Drone Control";  // DJI proprietary service
+        case 0xFD82: return "Security Dev";   // Generic security device marker
+        case 0xFEC0: return "Law Enforce";    // Law enforcement comms device
+        case 0xFD5C: return "Asset Tracker";  // Samsung SmartTag / Galaxy
+        case 0xFC3D: return "AirTag";         // Apple AirTag precision-finding
+        case 0xFEDF: return "Tile Tracker";   // Tile Bluetooth tracker (alt UUID)
+        case 0x1800: return "Generic Access";
+        case 0x1802: return "Alert Device";   // Immediate Alert — body-worn alarm
+        case 0x1803: return "Link Loss Dev";  // Link Loss — proximity badge/tracker
         default:     return "";
     }
 }
@@ -290,6 +300,7 @@ struct Detection {
     DeploymentType deployment = DEPLOY_PRIVATE;
     float confidence = 0.0f;
     uint8_t channel = 0;      // WiFi channel (0 = unknown/BLE)
+    int threatScore = 0;      // Composite score 0-100 (priority + proximity + persistence + confidence)
 };
 
 struct Config {
@@ -445,6 +456,7 @@ uint16_t getTierColor(int priority);
 const char* getTierLabel(int priority);
 int getTierStars(int priority);
 void setupWebServer();
+int computeThreatScore(const Detection& det);
 
 // ============================================================
 // PRIORITY DATABASE LOADER
@@ -703,6 +715,42 @@ int getTierStars(int priority) {
 }
 
 // ============================================================
+// COMPOSITE THREAT SCORE  (0 – 100)
+// ============================================================
+//
+// Factors:
+//   Priority tier   (0–75):  the OUI/priority tier, weighted heaviest
+//   RSSI proximity  (0–15):  closer = higher threat (stationary near you)
+//   Persistence     (0– 5):  repeated sightings = device is dwelling, not passing
+//   Confidence      (0– 5):  from priority DB confidence rating
+//
+// Score drives display sort order so the most actionable devices
+// always appear at the top regardless of discovery time.
+// ============================================================
+
+int computeThreatScore(const Detection& det) {
+    // Base from priority tier (5 tiers × 15 = max 75)
+    int score = det.priority * 15;
+
+    // Proximity bonus from RSSI
+    if      (det.rssi >= -50) score += 15; // Very close (<5m typical)
+    else if (det.rssi >= -60) score += 10; // Close     (~10m)
+    else if (det.rssi >= -70) score +=  5; // Medium    (~20m)
+    else if (det.rssi >= -80) score +=  2; // Far       (~50m)
+    // <-80 dBm = distant / passing, no bonus
+
+    // Persistence bonus — device staying in range across multiple scan cycles
+    if      (det.sightings >= 10) score += 5;
+    else if (det.sightings >=  5) score += 3;
+    else if (det.sightings >=  2) score += 1;
+
+    // Confidence bonus from priority database rating
+    score += (int)(det.confidence * 5.0f);
+
+    return constrain(score, 0, 100);
+}
+
+// ============================================================
 // BLE SCAN CALLBACK
 // ============================================================
 
@@ -751,11 +799,12 @@ class MyAdvertisedDeviceCallbacks: public NimBLEAdvertisedDeviceCallbacks {
 // WIFI PROMISCUOUS CALLBACK
 // ============================================================
 
-void onPromiscuousPacket(const uint8_t* mac, int8_t rssi, uint8_t channel) {
+void onPromiscuousPacket(const uint8_t* mac, int8_t rssi, uint8_t channel, const char* ssid) {
     char macStr[18];
     snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    checkOUI(String(macStr), rssi, false, "", nullptr, channel);
+    // ssid is non-null (may be empty string) — pass through for AP/beacon identification
+    checkOUI(String(macStr), rssi, false, String(ssid), nullptr, channel);
 }
 
 // ============================================================
@@ -1237,15 +1286,37 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
     if (isBLE && det.category == CAT_UNKNOWN && !det.bleCompany.isEmpty()) {
         struct BLEBoost { const char* keyword; DeviceCategory cat; int priority; };
         static const BLEBoost boosts[] = {
-            {"DJI",                  CAT_DRONE,   PRIORITY_HIGH},
-            {"Axon",                 CAT_BODYCAM, PRIORITY_HIGH},
-            {"FLIR",                 CAT_CCTV,    PRIORITY_HIGH},
-            {"Motorola Solutions",   CAT_BODYCAM, PRIORITY_MODERATE},
-            {"Hikvision",            CAT_CCTV,    PRIORITY_HIGH},
-            {"Dahua",                CAT_CCTV,    PRIORITY_HIGH},
-            {"Axis Comm",            CAT_CCTV,    PRIORITY_HIGH},
-            {"Avigilon",             CAT_CCTV,    PRIORITY_HIGH},
-            {"Genetec",              CAT_CCTV,    PRIORITY_MODERATE},
+            // ── Drones ────────────────────────────────────────────────────
+            {"DJI",                  CAT_DRONE,            PRIORITY_HIGH},
+            {"Skydio",               CAT_DRONE,            PRIORITY_CRITICAL},
+            {"Parrot",               CAT_DRONE,            PRIORITY_MODERATE},
+            {"Autel",                CAT_DRONE,            PRIORITY_HIGH},
+            // ── Body-worn cameras ─────────────────────────────────────────
+            {"Axon",                 CAT_BODYCAM,          PRIORITY_HIGH},
+            {"Taser",                CAT_BODYCAM,          PRIORITY_HIGH},
+            {"Reveal Media",         CAT_BODYCAM,          PRIORITY_MODERATE},
+            {"WCCTV",                CAT_BODYCAM,          PRIORITY_MODERATE},
+            {"Motorola Solutions",   CAT_BODYCAM,          PRIORITY_MODERATE},
+            // ── Fixed / PTZ surveillance cameras ─────────────────────────
+            {"FLIR",                 CAT_CCTV,             PRIORITY_HIGH},
+            {"Hikvision",            CAT_CCTV,             PRIORITY_HIGH},
+            {"Dahua",                CAT_CCTV,             PRIORITY_HIGH},
+            {"Axis Comm",            CAT_CCTV,             PRIORITY_HIGH},
+            {"Hanwha",               CAT_CCTV,             PRIORITY_HIGH},
+            {"Bosch Security",       CAT_CCTV,             PRIORITY_HIGH},
+            {"Pelco",                CAT_CCTV,             PRIORITY_HIGH},
+            {"Uniview",              CAT_CCTV,             PRIORITY_HIGH},
+            {"Milestone",            CAT_CCTV,             PRIORITY_MODERATE},
+            {"IndigoVision",         CAT_CCTV,             PRIORITY_MODERATE},
+            // ── Facial recognition / AI analytics ────────────────────────
+            {"Avigilon",             CAT_FACIAL_RECOG,     PRIORITY_CRITICAL},
+            {"Genetec",              CAT_FACIAL_RECOG,     PRIORITY_HIGH},
+            {"NEC",                  CAT_FACIAL_RECOG,     PRIORITY_HIGH},
+            {"Briefcam",             CAT_FACIAL_RECOG,     PRIORITY_CRITICAL},
+            // ── ANPR / traffic ────────────────────────────────────────────
+            {"Siemens",              CAT_ANPR,             PRIORITY_HIGH},
+            {"Jenoptik",             CAT_ANPR,             PRIORITY_HIGH},
+            {"Kapsch",               CAT_TRAFFIC,          PRIORITY_MODERATE},
         };
         for (const auto& b : boosts) {
             if (det.bleCompany.indexOf(b.keyword) >= 0) {
@@ -1258,6 +1329,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
         }
     }
 
+    det.threatScore = computeThreatScore(det);
     addDetection(det);
 
     // Alert based on priority
@@ -1306,6 +1378,8 @@ void addDetection(Detection det) {
             d.timestamp = millis();
             d.sightings++;
             if (d.ssid.isEmpty() && !det.ssid.isEmpty()) d.ssid = det.ssid;
+            // Recompute threat score with updated sightings and RSSI
+            d.threatScore = computeThreatScore(d);
             found = true;
             break;
         }
@@ -1314,10 +1388,11 @@ void addDetection(Detection det) {
         detections.insert(detections.begin(), det);
         if ((int)detections.size() > MAX_DETECTIONS) { detections.pop_back(); totalEvicted++; }
     }
-    // Sort: most recently seen first (timestamp desc); break ties by priority then RSSI
+    // Sort: highest threat score first; ties broken by priority, then most recent, then RSSI
     std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b) {
-        if (a.timestamp != b.timestamp) return a.timestamp > b.timestamp;
-        if (a.priority  != b.priority)  return a.priority  > b.priority;
+        if (a.threatScore != b.threatScore) return a.threatScore > b.threatScore;
+        if (a.priority    != b.priority)    return a.priority    > b.priority;
+        if (a.timestamp   != b.timestamp)   return a.timestamp   > b.timestamp;
         return a.rssi > b.rssi;
     });
     xSemaphoreGive(xDetectionMutex);
@@ -1362,7 +1437,7 @@ void setupWebServer() {
             obj["category"]      = getCategoryName(d.category);
             obj["relevance"]     = getRelevanceName(d.relevance);
             obj["priority"]      = d.priority;
-            obj["threat"]        = d.priority * 20;
+            obj["threat"]        = d.threatScore;
             obj["rssi"]          = d.rssi;
             obj["txPower"]       = d.hasTxPower ? d.txPower : 0;
             obj["hasTxPower"]    = d.hasTxPower;
