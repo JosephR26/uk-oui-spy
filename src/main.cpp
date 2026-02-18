@@ -102,7 +102,7 @@ XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
 #define PRIORITY_HIGH      4   // Surveillance Infrastructure
 #define PRIORITY_MODERATE  3   // Vehicle CCTV / Bodycams
 #define PRIORITY_LOW       2   // Consumer Surveillance
-#define PRIORITY_BASELINE  1   // ISP routers, consumer CPE (filtered)
+#define PRIORITY_BASELINE  1   // Lowest tier — kept for LED table indexing only
 
 // Premium colour palette (565 format)
 #define COL_BG         0x0000  // Pure black
@@ -710,7 +710,7 @@ const char* getTierLabel(int priority) {
         case 4: return "SURVEILLANCE INFRA";
         case 3: return "VEHICLE CCTV";
         case 2: return "CONSUMER SURVEIL";
-        default: return "BASELINE";
+        default: return "LOW";
     }
 }
 
@@ -1279,7 +1279,7 @@ void checkOUI(String macAddress, int8_t rssi, bool isBLE, String name, BLEMeta* 
         }
         det.category = CAT_UNKNOWN;
         det.relevance = REL_LOW;
-        det.priority = PRIORITY_BASELINE;
+        det.priority = PRIORITY_LOW;
     }
 
     // Enrich with priority database
@@ -1763,15 +1763,7 @@ void drawMainScreen() {
     auto snapshot = detections;
     xSemaphoreGive(xDetectionMutex);
 
-    // Baseline devices add no surveillance intelligence — always filtered from view
-    snapshot.erase(
-        std::remove_if(snapshot.begin(), snapshot.end(),
-            [](const Detection& d) { return d.priority <= PRIORITY_BASELINE; }),
-        snapshot.end()
-    );
-
-    // Calculate scroll limits — baseline cards are 30px, full cards 45px (inc. tier header amortised)
-    // Estimate visible count: use 4 as a conservative default; renderer stops at y>=208 anyway
+    // Calculate scroll limits — cards are 45px each; renderer stops at y>=208 anyway
     maxScroll = max(0, (int)snapshot.size() - 4);
     scrollOffset = constrain(scrollOffset, 0, maxScroll);
 
@@ -2022,7 +2014,7 @@ void drawRadarScreen() {
 
     int visibleCount = 0;
     for (auto& det : snapshot) {
-        if (det.priority > PRIORITY_BASELINE) visibleCount++;
+        visibleCount++;
     }
     tft.setTextSize(1);
     tft.setTextColor(COL_DIMTEXT);
@@ -2031,7 +2023,7 @@ void drawRadarScreen() {
 
     // ── Plot each detection ──────────────────────────────────
     for (auto& det : snapshot) {
-        if (det.priority <= PRIORITY_BASELINE) continue;
+        // all priority levels shown on radar
 
         // Map RSSI → pixel distance (closer RSSI = shorter distance = inner ring)
         float dist = (float)map(constrain(det.rssi, -100, -30), -30, -100, 6, r - 4);
@@ -2214,8 +2206,7 @@ void drawWizardScreen() {
         tft.setCursor(20, 85); tft.setTextColor(COL_ACCENT);
         tft.print("Device is ready for field use.");
         tft.setCursor(20, 110); tft.setTextColor(COL_DIMTEXT);
-        tft.print("Baseline devices will be filtered.");
-        tft.setCursor(20, 125); tft.print("Change in CONFIG > Show Baseline.");
+        tft.print("All detected devices will be shown.");
         tft.setCursor(20, 155); tft.setTextColor(TFT_WHITE);
         tft.print("Tap FINISH or press BOOT button.");
     }
