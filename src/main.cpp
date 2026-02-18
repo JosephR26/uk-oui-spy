@@ -1704,11 +1704,16 @@ void drawNavbar() {
     const char* labels[] = {"LIST", "RADAR", "CONFIG", "INFO"};
     for (int i = 0; i < 4; i++) {
         bool active = (currentScreen == (Screen)(i + 1));
+        int tabX = i * 80;
+        // Active: cyan underline bar at bottom of tab zone
         if (active) {
-            tft.fillRoundRect(5 + (i * 80), 212, 70, 24, 3, 0x1082);
+            tft.fillRect(tabX + 5, 234, 70, 3, COL_ACCENT);
         }
+        // Centre label within 80px tab zone (font1: 6px/char wide)
+        int labelW = strlen(labels[i]) * 6;
+        int labelX = tabX + (80 - labelW) / 2;
         tft.setTextColor(active ? COL_ACCENT : 0x7BEF);
-        tft.setCursor(20 + (i * 80), 220);
+        tft.setCursor(labelX, 219);
         tft.print(labels[i]);
     }
 }
@@ -1734,21 +1739,24 @@ void drawMainScreen() {
     xSemaphoreGive(xDetectionMutex);
 
     tft.setTextSize(1);
-    // BLE count (blue)
-    tft.setTextColor(0x001F); tft.setCursor(5, 31);
-    tft.printf("BLE:%d", bleTotal);
     // WiFi count (green)
-    tft.setTextColor(0x07E0); tft.setCursor(53, 31);
+    tft.setTextColor(0x07E0); tft.setCursor(8, 31);
     tft.printf("WiFi:%d", wifiTotal);
-    // Alert count (orange if any, grey if zero)
-    tft.setTextColor(alertCount > 0 ? 0xFD20 : 0x4A49);
-    tft.setCursor(107, 31);
+    // Separator
+    tft.setTextColor(0x2945); tft.setCursor(51, 31); tft.print(".");
+    // BLE count (blue)
+    tft.setTextColor(0x3C9F); tft.setCursor(57, 31);
+    tft.printf("BLE:%d", bleTotal);
+    // Separator
+    tft.setTextColor(0x2945); tft.setCursor(95, 31); tft.print(".");
+    // Alert count (orange if any, dim if zero)
+    tft.setTextColor(alertCount > 0 ? COL_TIER4 : 0x4A49);
+    tft.setCursor(101, 31);
     tft.printf("ALRT:%d", alertCount);
-    // Total devices (white)
-    tft.setTextColor(TFT_WHITE); tft.setCursor(162, 31);
-    tft.printf("TOT:%d", totalDevices);
-    // Anonymous randomised pings (dim — informational noise count)
-    tft.setTextColor(0x4A49); tft.setCursor(210, 31);
+    // Separator
+    tft.setTextColor(0x2945); tft.setCursor(143, 31); tft.print(".");
+    // Anonymous randomised pings — shows RF noise level
+    tft.setTextColor(0x4A49); tft.setCursor(149, 31);
     tft.printf("RND:%d", (int)totalAnonRND);
 
     // Correlation alert banner (if active)
@@ -1787,11 +1795,10 @@ void drawMainScreen() {
             tft.setTextColor(tierCol);
             tft.setCursor(10, y + 3);
 
-            // Stars
-            for (int s = 0; s < getTierStars(currentTier); s++) {
-                tft.print("*");
-            }
-            tft.printf(" %s", getTierLabel(currentTier));
+            // Square bullet in tier colour
+            tft.fillRect(10, y + 4, 4, 6, tierCol);
+            tft.setCursor(18, y + 3);
+            tft.printf("%s", getTierLabel(currentTier));
             y += 16;
             if (y >= 208) break;
         }
@@ -1810,8 +1817,8 @@ void drawMainScreen() {
         // ── Full 42px intelligence card ────────────────────────────────────
         tft.fillRoundRect(5, y, 310, 42, 3, (det.priority >= PRIORITY_CRITICAL) ? COL_CARD_HI : COL_CARD);
 
-        // Priority colour bar (6px)
-        tft.fillRect(5, y, 6, 42, getTierColor(det.priority));
+        // Priority colour bar (8px)
+        tft.fillRect(5, y, 8, 42, getTierColor(det.priority));
 
         // Protocol badge (top-right)
         uint16_t badgeCol = det.isBLE ? 0x001F : 0x07E0;
@@ -1846,7 +1853,7 @@ void drawMainScreen() {
 
         // Line 1 — Primary identifier
         tft.setTextColor(getTierColor(det.priority));
-        tft.setCursor(15, y + 4);
+        tft.setCursor(17, y + 4);
         tft.print(primaryName);
 
         // Line 2 — Device type / context + RSSI
@@ -1854,7 +1861,7 @@ void drawMainScreen() {
         //           > BLE company > channel info > address type > OUI prefix
         // "Unknown" never appears — we always have *something* real to show.
         tft.setTextColor(COL_DIMTEXT);
-        tft.setCursor(15, y + 16);
+        tft.setCursor(17, y + 16);
         String typeStr = "";
         if (!det.bleSvcHint.isEmpty()) {
             typeStr = det.bleSvcHint;
@@ -1892,7 +1899,7 @@ void drawMainScreen() {
                           (dwellSec < 3600) ? String(dwellSec / 60) + "m" :
                                               String(dwellSec / 3600) + "h";
         tft.setTextColor(0x4A49);
-        tft.setCursor(15, y + 29);
+        tft.setCursor(17, y + 29);
         tft.print(det.macAddress);
         tft.setTextColor(0x4A49);
         tft.setCursor(195, y + 29);
@@ -1921,15 +1928,13 @@ void drawMainScreen() {
         tft.setTextSize(1);
         tft.setTextColor(COL_DIMTEXT);
         if (totalScanned > 0) {
-            tft.setCursor(40, 95);
-            tft.print("No surveillance devices detected.");
-            tft.setCursor(45, 115);
-            tft.printf("%d devices scanned, %d matched", totalScanned, totalMatched);
-            tft.setTextColor(0x4208);
-            tft.setCursor(50, 140);
-            tft.print("This is normal in most areas.");
+            tft.setCursor(60, 100);
+            tft.print("Area clear — nothing detected");
+            tft.setTextColor(0x4A49);
+            tft.setCursor(110, 118);
+            tft.printf("%d scanned", totalScanned);
         } else {
-            tft.setCursor(90, 110);
+            tft.setCursor(100, 110);
             tft.print("Starting scan...");
         }
     }
