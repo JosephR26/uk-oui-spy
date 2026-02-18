@@ -1665,30 +1665,38 @@ void drawHeader(const char* title) {
     // Scanning indicator + last scan counts
     tft.setTextSize(1);
     if (scanning) {
-        tft.fillCircle(210, 14, 4, COL_ACCENT);
-        tft.setCursor(218, 10);
+        tft.fillCircle(197, 14, 4, COL_ACCENT);
+        tft.setCursor(205, 10);
         tft.setTextColor(COL_ACCENT);
         tft.print("SCAN");
     } else if (totalScanned > 0) {
         tft.setTextColor(COL_DIMTEXT);
-        tft.setCursor(200, 10);
+        tft.setCursor(190, 10);
         tft.printf("B:%d W:%d", lastBLECount, lastWiFiCount);
     }
 
     // Web portal indicator
     if (webPortalActive) {
         tft.setTextColor(TFT_GREEN);
-        tft.setCursor(255, 10);
+        tft.setCursor(245, 10);
         tft.print("WEB");
     }
 
-    // Battery icon
-    tft.drawRect(285, 7, 25, 12, TFT_WHITE);
-    tft.fillRect(310, 10, 2, 6, TFT_WHITE);
+    // SD card icon — notched rectangle (standard SD card silhouette)
+    // body: 10 x 12 px at (268, 8); top-left corner cut to give card shape
+    {
+        uint16_t sdCol = sdCardAvailable ? 0x07E0 : 0x4A49;
+        tft.fillRect(268, 8,  10, 12, sdCol);   // full body
+        tft.fillRect(268, 8,  4,  4,  COL_HEADER); // notch top-left corner
+    }
+
+    // Battery icon (outline + fill; data may not be accurate yet)
+    tft.drawRect(284, 7, 25, 12, TFT_WHITE);
+    tft.fillRect(309, 10, 2, 6, TFT_WHITE);
     int batPct = constrain(map((int)(batteryVoltage * 100), 330, 420, 0, 100), 0, 100);
     int batWidth = map(batPct, 0, 100, 0, 21);
     uint16_t batColor = batPct < 20 ? TFT_RED : (batPct < 50 ? TFT_YELLOW : TFT_GREEN);
-    tft.fillRect(287, 9, batWidth, 8, batColor);
+    tft.fillRect(286, 9, batWidth, 8, batColor);
 }
 
 void drawNavbar() {
@@ -1744,10 +1752,6 @@ void drawMainScreen() {
     // Anonymous randomised pings (dim — informational noise count)
     tft.setTextColor(0x4A49); tft.setCursor(210, 31);
     tft.printf("RND:%d", (int)totalAnonRND);
-    // SD indicator (green=mounted, grey=no SD)
-    tft.setTextColor(sdCardAvailable ? 0x07E0 : 0x4A49);
-    tft.setCursor(265, 31);
-    tft.print(sdCardAvailable ? "SD:OK" : "SD:--");
 
     // Correlation alert banner (if active)
     int yStart = 47;
