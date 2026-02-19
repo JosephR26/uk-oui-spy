@@ -104,20 +104,21 @@ XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
 #define PRIORITY_LOW       2   // Consumer Surveillance
 #define PRIORITY_BASELINE  1   // Lowest tier — kept for LED table indexing only
 
-// Premium colour palette (565 format)
+// Premium colour palette — BGR565 values for ILI9341 with TFT_RGB_ORDER=TFT_BGR
+// Formula: BGR565 = (B5<<11)|(G6<<5)|R5  so display shows desired (R,G,B)
 #define COL_BG         0x0000  // Pure black
-#define COL_CARD       0x18C3  // Dark charcoal card
-#define COL_CARD_HI    0x2945  // Slightly lighter card for high-value
-#define COL_HEADER     0x1082  // Dark header bar
-#define COL_NAVBAR     0x0841  // Dark navbar
-#define COL_ACCENT     0x07FF  // Cyan accent
-#define COL_TIER5      0xF800  // Red - Critical
-#define COL_TIER4      0xFD20  // Orange - High
-#define COL_TIER3      0xFFE0  // Yellow - Moderate
-#define COL_TIER2      0x07E0  // Green - Low
-#define COL_TIER1      0x4208  // Grey - Baseline
-#define COL_ALERT_BG   0x4000  // Dark red alert background
-#define COL_DIMTEXT    0xAD55  // Dimmed text
+#define COL_CARD       0x18C3  // Dark charcoal card  (near-grey, symmetric)
+#define COL_CARD_HI    0x2945  // Slightly lighter card (near-grey, symmetric)
+#define COL_HEADER     0x1082  // Dark header bar      (near-grey, symmetric)
+#define COL_NAVBAR     0x0841  // Dark navbar          (near-grey, symmetric)
+#define COL_ACCENT     0x057F  // Amber  — display (R=248, G=172, B=0)
+#define COL_TIER5      0x001F  // Red    — display (R=248, G=0,   B=0)
+#define COL_TIER4      0x053F  // Orange — display (R=248, G=164, B=0)
+#define COL_TIER3      0x07FF  // Yellow — display (R=248, G=252, B=0)
+#define COL_TIER2      0x7BEF  // Grey   — display (R=120, G=124, B=120) [symmetric, unclassified]
+#define COL_TIER1      0x4208  // Grey   — display (R=64,  G=64,  B=64) [symmetric]
+#define COL_ALERT_BG   0x0014  // Dark red alert bg — display (R=160, G=0, B=0)
+#define COL_DIMTEXT    0xAD55  // Dimmed text (near-grey, symmetric)
 
 // ============================================================
 // DATA STRUCTURES
@@ -345,6 +346,7 @@ unsigned long lastScanTime = 0;
 unsigned long lastInteractionTime = 0;
 int scanInterval = 5000;
 bool scanning = false;
+bool scanPaused = false;
 char sessionId[10] = "----";      // generated at boot from esp_random()
 char sessionLogPath[32] = "/detections.csv";  // set to /sessions/XXXX-XXXX.csv after SD init
 char wifiSsid[64] = "";           // loaded from /wifi.txt on SD card
@@ -889,10 +891,10 @@ void UITask(void *pvParameters) {
         }
         batteryVoltage = readBattery();
 
-        // Periodic refresh every 2 seconds for battery level, scan status, etc.
-        // This is the ONLY timer-driven redraw; everything else is event-driven.
+        // Periodic refresh every 5 seconds — reduces flicker from fillScreen redraws.
+        // Touch events and screen changes still trigger immediate redraws.
         static unsigned long lastPeriodicRefresh = 0;
-        if (millis() - lastPeriodicRefresh >= 2000) {
+        if (millis() - lastPeriodicRefresh >= 5000) {
             displayDirty = true;
             lastPeriodicRefresh = millis();
         }
@@ -999,7 +1001,7 @@ void setup() {
     // Header bar — project name + version
     tft.fillRect(0, 0, 320, 28, COL_HEADER);
     tft.setTextSize(2);
-    tft.setTextColor(0x07FF);       // cyan
+    tft.setTextColor(0xFFE0);       // cyan (BGR: B=31,G=63,R=0 → display R=0,G=252,B=248)
     tft.setCursor(8, 6);
     tft.print("UK-OUI-SPY PRO");
     tft.setTextSize(1);
@@ -1083,7 +1085,7 @@ void setup() {
     Serial.println("[BOOT] initSDCard OK");
     bootTag("Initialising SD card",
             sdCardAvailable ? "ONLINE" : "OFFLINE",
-            sdCardAvailable ? 0x07E0   : 0xFD20);                 // green / orange
+            sdCardAvailable ? 0x07E0   : 0x053F);                 // green / orange (BGR-corrected)
 
     Serial.printf("[BOOT] OUI database: %d entries\n", OUI_DATABASE_SIZE);
 
@@ -1107,7 +1109,7 @@ void setup() {
             config.enableWiFi ? 0x07E0   : 0x4A49);               // green / grey
 
     // Session ID — blue badge, white text
-    bootTag("Session ID", sessionId, 0x001F, TFT_WHITE);
+    bootTag("Session ID", sessionId, 0xF800, TFT_WHITE);  // 0xF800 = blue in BGR
     Serial.printf("[BOOT] Session: %s\n", sessionId);
 
     // NTP time sync — via STA if wifi.txt credentials found, otherwise AP MODE
@@ -1130,11 +1132,11 @@ void setup() {
                 delay(100);
             }
             bootTag("Syncing time", ntpOk ? "SYNCED" : "TIMEOUT",
-                                    ntpOk ? 0x07E0   : 0xFD20);
+                                    ntpOk ? 0x07E0   : 0x053F);  // BGR-corrected orange
             Serial.printf("[BOOT] NTP sync %s\n", ntpOk ? "OK" : "timed out");
         } else {
             Serial.println("[WiFi] STA connection timed out");
-            bootTag("Syncing time", "TIMEOUT", 0xFD20);
+            bootTag("Syncing time", "TIMEOUT", 0x053F);  // BGR-corrected orange
         }
     } else {
         bootTag("Syncing time", "AP MODE", 0x4A49);               // grey — no credentials, expected
@@ -1157,7 +1159,7 @@ void loop() { vTaskDelay(pdMS_TO_TICKS(1000)); }
 // PERIPHERAL INIT
 // ============================================================
 
-void initDisplay() { tft.init(); tft.setRotation(1); tft.fillScreen(COL_BG); }
+void initDisplay() { tft.init(); tft.invertDisplay(true); tft.setRotation(1); tft.fillScreen(COL_BG); }
 
 void initTouch() {
     touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
@@ -1467,7 +1469,8 @@ bool addDetection(Detection det) {
         return a.rssi > b.rssi;
     });
     xSemaphoreGive(xDetectionMutex);
-    displayDirty = true;  // New/updated detection → refresh display
+    // Don't trigger immediate redraw — periodic timer handles display refresh
+    // to avoid constant flickering during active scanning
     return !found;  // true = genuinely new device (first sighting)
 }
 
@@ -1662,39 +1665,36 @@ void drawHeader(const char* title) {
     tft.setCursor(10, 6);
     tft.print(title);
 
-    // Scanning indicator
+    // Scanning / paused indicator
     tft.setTextSize(1);
-    if (scanning) {
+    if (scanPaused) {
+        tft.fillRect(197, 10, 3, 8, COL_TIER4);   // pause bars (left)
+        tft.fillRect(202, 10, 3, 8, COL_TIER4);   // pause bars (right)
+        tft.setTextColor(COL_TIER4);
+        tft.setCursor(208, 10);
+        tft.print("PAUSED");
+    } else if (scanning) {
         tft.fillCircle(197, 14, 4, COL_ACCENT);
         tft.setCursor(205, 10);
         tft.setTextColor(COL_ACCENT);
         tft.print("SCAN");
     }
 
-    // Web portal indicator
+    // SD card icon — left of globe, only shown when card is present
+    if (sdCardAvailable) {
+        tft.fillRect(290, 8,  10, 12, 0x07E0);  // green body
+        tft.fillRect(290, 8,  4,  4,  COL_HEADER); // notch top-left corner
+    }
+
+    // Web portal indicator — globe, far right
     if (webPortalActive) {
-        // Globe icon: outer circle + equator + central meridian oval
-        uint16_t wc = TFT_GREEN;
-        tft.drawCircle(252, 14, 6, wc);
-        tft.drawFastHLine(246, 14, 13, wc);
-        tft.drawEllipse(252, 14, 3, 6, wc);
+        uint16_t wc = 0x07E0;  // green (BGR-safe)
+        tft.drawCircle(310, 14, 6, wc);
+        tft.drawFastHLine(304, 14, 13, wc);
+        tft.drawEllipse(310, 14, 3, 6, wc);
     }
 
-    // SD card icon — notched rectangle (standard SD card silhouette)
-    // body: 10 x 12 px at (268, 8); top-left corner cut to give card shape
-    {
-        uint16_t sdCol = sdCardAvailable ? 0x07E0 : 0x4A49;
-        tft.fillRect(268, 8,  10, 12, sdCol);   // full body
-        tft.fillRect(268, 8,  4,  4,  COL_HEADER); // notch top-left corner
-    }
-
-    // Battery icon (outline + fill; data may not be accurate yet)
-    tft.drawRect(284, 7, 25, 12, TFT_WHITE);
-    tft.fillRect(309, 10, 2, 6, TFT_WHITE);
-    int batPct = constrain(map((int)(batteryVoltage * 100), 330, 420, 0, 100), 0, 100);
-    int batWidth = map(batPct, 0, 100, 0, 21);
-    uint16_t batColor = batPct < 20 ? TFT_RED : (batPct < 50 ? TFT_YELLOW : TFT_GREEN);
-    tft.fillRect(286, 9, batWidth, 8, batColor);
+    // Battery icon removed — device is always USB-powered (no onboard battery)
 }
 
 void drawNavbar() {
@@ -1739,22 +1739,22 @@ void drawMainScreen() {
     xSemaphoreGive(xDetectionMutex);
 
     tft.setTextSize(1);
-    // WiFi count (green)
-    tft.setTextColor(0x07E0); tft.setCursor(8, 31);
+    // WiFi count (amber — consistent with accent, avoids cyan)
+    tft.setTextColor(0x001F); tft.setCursor(8, 31);  // blue text (standard RGB565)
     tft.printf("WiFi:%d", wifiTotal);
     // Separator
-    tft.setTextColor(0x2945); tft.setCursor(51, 31); tft.print(".");
-    // BLE count (blue)
-    tft.setTextColor(0x3C9F); tft.setCursor(57, 31);
+    tft.setTextColor(COL_DIMTEXT); tft.setCursor(51, 31); tft.print("·");
+    // BLE count (red — standard RGB565 after invertDisplay)
+    tft.setTextColor(0xF800); tft.setCursor(57, 31);
     tft.printf("BLE:%d", bleTotal);
     // Separator
-    tft.setTextColor(0x2945); tft.setCursor(95, 31); tft.print(".");
+    tft.setTextColor(COL_DIMTEXT); tft.setCursor(95, 31); tft.print("·");
     // Alert count (orange if any, dim if zero)
     tft.setTextColor(alertCount > 0 ? COL_TIER4 : 0x4A49);
     tft.setCursor(101, 31);
     tft.printf("ALRT:%d", alertCount);
     // Separator
-    tft.setTextColor(0x2945); tft.setCursor(143, 31); tft.print(".");
+    tft.setTextColor(COL_DIMTEXT); tft.setCursor(143, 31); tft.print("·");
     // Anonymous randomised pings — shows RF noise level
     tft.setTextColor(0x4A49); tft.setCursor(149, 31);
     tft.printf("RND:%d", (int)totalAnonRND);
@@ -1766,10 +1766,14 @@ void drawMainScreen() {
         yStart = 69;
     }
 
-    // Take snapshot
-    xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
-    auto snapshot = detections;
-    xSemaphoreGive(xDetectionMutex);
+    // Take snapshot — frozen when paused so the list can be read without refreshing
+    static std::vector<Detection> pausedSnapshot;
+    if (!scanPaused) {
+        xSemaphoreTake(xDetectionMutex, portMAX_DELAY);
+        pausedSnapshot = detections;
+        xSemaphoreGive(xDetectionMutex);
+    }
+    auto snapshot = pausedSnapshot;
 
     // Calculate scroll limits — cards are 45px each; renderer stops at y>=208 anyway
     maxScroll = max(0, (int)snapshot.size() - 4);
@@ -1783,24 +1787,25 @@ void drawMainScreen() {
     for (int i = scrollOffset; i < (int)snapshot.size() && y < 208; i++) {
         auto& det = snapshot[i];
 
-        // Draw tier separator when tier changes
+        // Draw tier separator when tier changes — only for priority >= MODERATE (meaningful groups)
         if (det.priority != currentTier) {
             currentTier = det.priority;
-            uint16_t tierCol = getTierColor(currentTier);
+            if (currentTier >= PRIORITY_MODERATE) {
+                uint16_t tierCol = getTierColor(currentTier);
 
-            // Tier header bar
-            tft.fillRect(0, y, 320, 14, 0x0000);
-            tft.fillRect(2, y + 1, 3, 12, tierCol);
-            tft.setTextSize(1);
-            tft.setTextColor(tierCol);
-            tft.setCursor(10, y + 3);
+                // Tier header bar
+                tft.fillRect(0, y, 320, 14, 0x0000);
+                tft.fillRect(2, y + 1, 3, 12, tierCol);
+                tft.setTextSize(1);
 
-            // Square bullet in tier colour
-            tft.fillRect(10, y + 4, 4, 6, tierCol);
-            tft.setCursor(18, y + 3);
-            tft.printf("%s", getTierLabel(currentTier));
-            y += 16;
-            if (y >= 208) break;
+                // Square bullet in tier colour, label in dim grey
+                tft.fillRect(10, y + 4, 4, 6, tierCol);
+                tft.setTextColor(COL_DIMTEXT);
+                tft.setCursor(18, y + 3);
+                tft.printf("%s", getTierLabel(currentTier));
+                y += 16;
+                if (y >= 208) break;
+            }
         }
 
         // ── Derive the best primary name for line 1 ────────────────────────
@@ -1821,7 +1826,7 @@ void drawMainScreen() {
         tft.fillRect(5, y, 8, 42, getTierColor(det.priority));
 
         // Protocol badge (top-right)
-        uint16_t badgeCol = det.isBLE ? 0x001F : 0x07E0;
+        uint16_t badgeCol = det.isBLE ? 0x001F : 0xF800;  // BGR fills: 0x001F=red(BLE), 0xF800=blue(WiFi)
         tft.fillRoundRect(265, y + 2, 42, 12, 2, badgeCol);
         tft.setTextSize(1);
         tft.setTextColor(TFT_WHITE);
@@ -1831,19 +1836,23 @@ void drawMainScreen() {
         // Category badge (below protocol badge)
         if (det.category != CAT_UNKNOWN) {
             uint16_t catBg; const char* catLabel;
+            // BGR565 colours — display (R,G,B): CCTV=dark red, ANPR=red-orange,
+            // DRONE=purple, BCAM=dark red, CLOUD=dark red, TRAFF=olive,
+            // FACE=purple (symmetric), CITY=dark teal, PARK=dark red-orange,
+            // DASH=grey (symmetric), BELL=mid-green (symmetric)
             switch (det.category) {
-                case CAT_CCTV:                catBg = 0xC000; catLabel = "CCTV";  break;
-                case CAT_ANPR:                catBg = 0xC8A0; catLabel = "ANPR";  break;
-                case CAT_DRONE:               catBg = 0x4810; catLabel = "DRONE"; break;
-                case CAT_BODYCAM:             catBg = 0xA800; catLabel = "BCAM";  break;
-                case CAT_CLOUD_CCTV:          catBg = 0x8000; catLabel = "CLOUD"; break;
-                case CAT_TRAFFIC:             catBg = 0x8400; catLabel = "TRAFF"; break;
-                case CAT_FACIAL_RECOG:        catBg = 0x8010; catLabel = "FACE";  break;
-                case CAT_SMART_CITY_INFRA:    catBg = 0x0412; catLabel = "CITY";  break;
-                case CAT_PARKING_ENFORCEMENT: catBg = 0xA840; catLabel = "PARK";  break;
-                case CAT_DASH_CAM:            catBg = 0x4208; catLabel = "DASH";  break;
-                case CAT_DOORBELL_CAM:        catBg = 0x03E0; catLabel = "BELL";  break;
-                default:                      catBg = 0x2945; catLabel = "UNK";   break;
+                case CAT_CCTV:                catBg = 0x0018; catLabel = "CCTV";  break;  // dark red
+                case CAT_ANPR:                catBg = 0x0099; catLabel = "ANPR";  break;  // red-orange
+                case CAT_DRONE:               catBg = 0x8009; catLabel = "DRONE"; break;  // purple
+                case CAT_BODYCAM:             catBg = 0x0015; catLabel = "BCAM";  break;  // dark red
+                case CAT_CLOUD_CCTV:          catBg = 0x0010; catLabel = "CLOUD"; break;  // dark red
+                case CAT_TRAFFIC:             catBg = 0x0410; catLabel = "TRAFF"; break;  // olive
+                case CAT_FACIAL_RECOG:        catBg = 0x8010; catLabel = "FACE";  break;  // purple (symmetric)
+                case CAT_SMART_CITY_INFRA:    catBg = 0x1420; catLabel = "CITY";  break;  // dark teal
+                case CAT_PARKING_ENFORCEMENT: catBg = 0x0055; catLabel = "PARK";  break;  // dark red-orange
+                case CAT_DASH_CAM:            catBg = 0x4208; catLabel = "DASH";  break;  // grey (symmetric)
+                case CAT_DOORBELL_CAM:        catBg = 0x03E0; catLabel = "BELL";  break;  // mid-green (symmetric)
+                default:                      catBg = 0x2945; catLabel = "UNK";   break;  // dark grey (symmetric)
             }
             tft.fillRoundRect(265, y + 16, 42, 12, 2, catBg);
             tft.setTextColor(TFT_WHITE);
@@ -1851,8 +1860,8 @@ void drawMainScreen() {
             tft.print(catLabel);
         }
 
-        // Line 1 — Primary identifier
-        tft.setTextColor(getTierColor(det.priority));
+        // Line 1 — Primary identifier: TFT_WHITE renders dark on BGR display (mid-grey card)
+        tft.setTextColor(TFT_WHITE);
         tft.setCursor(17, y + 4);
         tft.print(primaryName);
 
@@ -1904,7 +1913,6 @@ void drawMainScreen() {
         tft.setTextColor(0x4A49);
         tft.setCursor(195, y + 29);
         tft.printf("%s", dwellStr.c_str());
-        if (det.sightings > 1) { tft.setCursor(227, y + 29); tft.printf("x%d", det.sightings); }
         if (det.confidence >= 0.7f) {
             tft.setTextColor(getTierColor(det.priority));
             tft.setCursor(265, y + 29);
@@ -1951,7 +1959,7 @@ void drawCorrelationBanner() {
     if (activeAlerts.empty()) return;
 
     auto& alert = activeAlerts[0];  // Show most recent
-    uint16_t bgCol = (alert.alertLevel == "CRITICAL") ? COL_ALERT_BG : 0x4200;
+    uint16_t bgCol = (alert.alertLevel == "CRITICAL") ? COL_ALERT_BG : 0x0208;  // BGR: dark amber (64,64,0)
 
     tft.fillRect(0, 29, 320, 22, bgCol);
 
@@ -2046,22 +2054,20 @@ void drawRadarScreen() {
                       (det.priority >= 4) ? 6 :
                       (det.priority >= 3) ? 5 : 4;
 
-        uint16_t col = getTierColor(det.priority);
+        // Protocol colour: blue=BLE, amber=WiFi — consistent with card badges
+        uint16_t dotCol  = det.isBLE ? 0x001F : 0xF800;  // BGR fills: red=BLE, blue=WiFi
+        uint16_t tierCol = getTierColor(det.priority);
 
-        // Halo ring for high-priority targets so they stand out from the grid
+        // Halo ring in tier colour for high-priority targets
         if (det.priority >= PRIORITY_HIGH) {
-            tft.drawCircle(px, py, dotSize + 2, col);
+            tft.drawCircle(px, py, dotSize + 2, tierCol);
         }
-        tft.fillCircle(px, py, dotSize, col);
-
-        // BLE/WiFi type indicator: small inner dot
-        uint16_t innerCol = det.isBLE ? 0xF81F : TFT_WHITE;  // magenta=BLE, white=WiFi
-        tft.fillCircle(px, py, 1, innerCol);
+        tft.fillCircle(px, py, dotSize, dotCol);
 
         // Label for high-priority targets (priority >= HIGH)
         if (det.priority >= PRIORITY_HIGH) {
             tft.setTextSize(1);
-            tft.setTextColor(col);
+            tft.setTextColor(tierCol);
             // Abbreviate to avoid overlap — 7 chars max
             String label = det.manufacturer.length() > 0
                 ? det.manufacturer.substring(0, 7)
@@ -2086,13 +2092,12 @@ void drawRadarScreen() {
     }
 
     // ── Legend (bottom-left) ─────────────────────────────────
+    // Legend: filled circles matching actual radar dots
     tft.setTextSize(1);
-    tft.setTextColor(COL_DIMTEXT);
-    tft.setCursor(5, 195);
-    tft.setTextColor(0xF81F); tft.print("o");
-    tft.setTextColor(COL_DIMTEXT); tft.print("BLE  ");
-    tft.setTextColor(TFT_WHITE); tft.print("o");
-    tft.setTextColor(COL_DIMTEXT); tft.print("WiFi");
+    tft.fillCircle(8,  200, 3, 0x001F);    // red fill (BGR) = BLE
+    tft.setTextColor(COL_DIMTEXT); tft.setCursor(14, 196); tft.print("BLE");
+    tft.fillCircle(44, 200, 3, 0xF800);    // blue fill (BGR) = WiFi
+    tft.setTextColor(COL_DIMTEXT); tft.setCursor(50, 196); tft.print("WiFi");
 
     // ── Correlation alert bar ────────────────────────────────
     if (!activeAlerts.empty()) {
@@ -2159,23 +2164,12 @@ void drawInfoScreen() {
     };
 
     drawRow("Firmware:", VERSION);
-    drawRow("Battery:", String(batteryVoltage, 2) + " V");
     drawRow("OUI Database:", String(OUI_DATABASE_SIZE) + " entries");
     drawRow("Priority DB:", String(priorityDB.size()) + " entries");
-    drawRow("Corr. Rules:", String(correlationRules.size()) + " rules");
     drawRow("Active Alerts:", String(activeAlerts.size()));
-    drawRow("Detections:", String(detections.size()) + "/" + String(MAX_DETECTIONS) +
+    drawRow("Detections:", String(detections.size()) +
                           (totalEvicted ? " (" + String(totalEvicted) + " dropped)" : ""));
     drawRow("Free Memory:", String(ESP.getFreeHeap() / 1024) + " KB");
-    drawRow("Scanned:", String(totalScanned) + " total, " + String(totalMatched) + " matched");
-    drawRow("Touch:", touchAvailable ? "OK" : "ERROR");
-    drawRow("SD Card:", sdCardAvailable ? "OK" : "NOT FOUND");
-    if (webPortalActive) {
-        drawRow("Web Portal:", String(AP_SSID) + " (" + String(WiFi.softAPgetStationNum()) + ")");
-        drawRow("AP Password:", config.apPassword);
-    } else {
-        drawRow("Web Portal:", "Disabled");
-    }
 
     drawNavbar();
     tft.endWrite();
@@ -2242,8 +2236,11 @@ void handleTouchGestures() {
         }
         displayDirty = true;
     } else if (currentScreen == SCREEN_MAIN) {
-        // Scroll: top half = scroll up, bottom half = scroll down
-        if (y < 120 && scrollOffset > 0) {
+        if (y < 28) {
+            // Header tap — toggle scan pause
+            scanPaused = !scanPaused;
+            displayDirty = true;
+        } else if (y < 120 && scrollOffset > 0) {
             scrollOffset--;
             displayDirty = true;
         } else if (y >= 120 && y < 210 && scrollOffset < maxScroll) {
